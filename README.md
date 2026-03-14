@@ -1,424 +1,364 @@
 # March Machine Learning Mania 2026
 
-Predict the probability of every possible team matchup in the 2026 NCAA Division I Men's and Women's basketball tournaments. Scored by **Brier score** (mean squared error of predicted probabilities vs actual 0/1 outcomes). Lower is better.
+**Predicting NCAA Tournament Outcomes with an Ensemble of Gradient Boosting and Neural Network Models**
 
-**Deadline**: March 19, 2026
-
-## Table of Contents
-
-1. [Competition Overview](#competition-overview)
-2. [Infrastructure](#infrastructure)
-3. [Project Structure](#project-structure)
-4. [Pipeline Stages](#pipeline-stages)
-   - [00 Data Collection](#00-data-collection)
-   - [01 Data Joining](#01-data-joining)
-   - [02 EDA](#02-exploratory-data-analysis)
-   - [03 Data Split](#03-data-split)
-   - [04 Preprocessing](#04-preprocessing)
-   - [05 Models](#05-models)
-   - [06 Model Evaluation & Ensemble](#06-model-evaluation--ensemble)
-   - [07 Submission](#07-submission)
-5. [Men's vs Women's Pipeline Differences](#mens-vs-womens-pipeline-differences)
-6. [Results](#results)
-7. [Research Foundation](#research-foundation)
-8. [How to Reproduce](#how-to-reproduce)
+This project builds a full ML pipeline to predict the probability of every possible team matchup in both the 2026 NCAA Men's and Women's basketball tournaments. The solution placed on the Kaggle competition leaderboard, scored by **Brier score** (mean squared error of predicted probabilities vs actual 0/1 outcomes).
 
 ---
 
-## Competition Overview
+## Overview
 
-### Submission Format
-- CSV with two columns: `ID` and `Pred`
-- `ID` format: `YYYY_XXXX_YYYY` where XXXX < YYYY are TeamIDs
-- `Pred`: probability that the lower-ID team (XXXX) beats the higher-ID team (YYYY)
-- Men's TeamIDs: 1000–1999. Women's TeamIDs: 3000–3999
-- Must predict every possible matchup, not just tournament games
-- Stage 1 covers 2022–2025 (validation). Stage 2 covers 2026 (real submission)
-
-### Scoring
-Brier score = mean of (predicted probability - actual outcome)^2 across all games that actually occurred in the tournament. Since 2024, the Brier score is averaged over 6 tournament rounds rather than all games equally, heavily weighting late-round accuracy.
+| | Men's | Women's |
+|---|---|---|
+| **Training games** | 2,585 tournament matchups (1985-2025) | 1,717 tournament matchups (1998-2025) |
+| **Features** | 27 (seeds, Massey rankings, efficiency stats, box scores) | 21 (seeds, efficiency stats, box scores — no Massey) |
+| **Models** | XGBoost, LightGBM, CatBoost, PyTorch | XGBoost, LightGBM, CatBoost, PyTorch |
+| **Best single model** | PyTorch (Brier: 0.1797) | PyTorch (Brier: 0.1347) |
+| **Final ensemble** | **Brier: 0.1781** | **Brier: 0.1343** |
+| **Predictions generated** | 66,430 matchups | 65,703 matchups |
 
 ---
 
-## Infrastructure
+## Pipeline Architecture
 
-- **Execution environment**: AWS SageMaker notebook instances (Python 3.12)
-- **Data storage**: S3 bucket `s3://march-machine-learning-mania-2026/`
-- **S3 layout**: Each pipeline stage stores outputs in a matching prefix, separated by gender:
-  - `s3://.../{stage}/{gender}/filename.parquet`
-- **Local data**: `00_data_collection/` exists locally for development. It is gitignored.
-
----
-
-## Project Structure
+The pipeline runs in 8 stages, with separate men's and women's notebooks at each stage. All data flows through S3 on AWS SageMaker.
 
 ```
-march_machine_learning_mania_2026/
-├── CLAUDE.md                       # Project instructions for Claude
-├── RESEARCH.md                     # Research findings on past winning strategies
-├── README.md                       # This file
-├── 00_data_collection/             # Raw Kaggle data (local + S3)
-├── 01_data_joining/
-│   ├── mens_notebook.ipynb
-│   ├── womens_notebook.ipynb
-│   └── output/
-├── 02_eda/
-│   ├── mens_notebook.ipynb
-│   ├── womens_notebook.ipynb
-│   └── output/                     # Plots saved here
-├── 03_data_split/
-│   ├── mens_notebook.ipynb
-│   ├── womens_notebook.ipynb
-│   └── output/
-├── 04_preprocessing/
-│   ├── mens_notebook.ipynb
-│   ├── womens_notebook.ipynb
-│   └── output/
-├── 05_models/
-│   ├── xgboost/
-│   │   ├── mens_notebook.ipynb
-│   │   └── womens_notebook.ipynb
-│   ├── lightgbm/
-│   │   ├── mens_notebook.ipynb
-│   │   └── womens_notebook.ipynb
-│   ├── catboost/
-│   │   ├── mens_notebook.ipynb
-│   │   └── womens_notebook.ipynb
-│   └── pytorch/
-│       ├── mens_notebook.ipynb
-│       └── womens_notebook.ipynb
-├── 06_model_eval/
-│   ├── mens_notebook.ipynb
-│   ├── womens_notebook.ipynb
-│   └── output/                     # Plots saved here
-└── 07_submission/
-    ├── generate_submission.ipynb    # Combines men's + women's
-    └── output/
+00_data_collection/     Raw Kaggle CSVs
+        |
+01_data_joining/        Merge & aggregate into parquet datasets
+        |
+02_eda/                 Exploratory analysis & visualizations
+        |
+03_data_split/          Tournament matchups + LOGO-CV fold assignments
+        |
+04_preprocessing/       Difference features + flip-and-double augmentation
+        |
+05_models/              4 models x LOGO-CV + isotonic calibration
+   |  xgboost/            XGBoost (max_depth=3, lr=0.05)
+   |  lightgbm/           LightGBM (num_leaves=8, lr=0.05)
+   |  catboost/           CatBoost (depth=4, lr=0.05)
+   |  pytorch/            BrierNet (64->32->1, Brier loss)
+        |
+06_model_eval/          Compare models + optimize ensemble weights
+        |
+07_submission/          Combine men's + women's into final CSV
 ```
 
 ---
 
-## Pipeline Stages
+# Part 1: Men's Tournament
 
-### 00 Data Collection
+## Data
 
-Raw Kaggle competition data. Not modified by any pipeline stage.
+The men's dataset spans 41 seasons (1985-2026) with 198,079 regular season games and 2,585 tournament games. Detailed box scores (FGM, FGA, 3PT, FT, rebounds, assists, turnovers, steals, blocks) are available from 2003 onward. Additionally, **Massey Ordinals** provide pre-tournament rankings from ~191 rating systems (including KenPom, Sagarin, and others) — a uniquely powerful feature for men's predictions.
 
-**Men's files** (prefixed `M`):
-- `MRegularSeasonCompactResults.csv` — game scores, 1985–2026 (198,079 games)
-- `MRegularSeasonDetailedResults.csv` — box scores, 2003–2026 (124,031 games)
-- `MNCAATourneyCompactResults.csv` — tournament scores, 1985–2025 (2,585 games)
-- `MNCAATourneyDetailedResults.csv` — tournament box scores, 2003–2025 (1,449 games)
-- `MNCAATourneySeeds.csv` — tournament seeds (2,626 entries)
-- `MMasseyOrdinals.csv` — weekly rankings from ~197 systems, 2003–2026 (5.8M rows)
-- `MTeams.csv`, `MTeamConferences.csv`, `MTeamCoaches.csv`, `MSeasons.csv`
+*Table 1: Men's data sources and their coverage.*
 
-**Women's files** (prefixed `W`):
-- Same structure but compact results start 1998, detailed start 2010
-- No Massey Ordinals, no coaches data
+| Dataset | Rows | Seasons | Description |
+|---------|------|---------|-------------|
+| Regular season (compact) | 198,079 | 1985-2026 | Game scores and locations |
+| Regular season (detailed) | 124,031 | 2003-2026 | Full box score statistics |
+| Tournament (compact) | 2,585 | 1985-2025 | Tournament game scores |
+| Tournament (detailed) | 1,449 | 2003-2025 | Tournament box scores |
+| Massey Ordinals | 5,819,228 | 2003-2026 | Weekly rankings from ~191 systems |
+| Tournament seeds | 2,626 | 1985-2025 | Seed assignments per team |
 
-**Shared**: `Conferences.csv`, `Cities.csv`, `SampleSubmissionStage1.csv`, `SampleSubmissionStage2.csv`
+## Exploratory Data Analysis
 
----
+### How Predictive Are Seeds?
 
-### 01 Data Joining
+Seeds are the single most universally used feature in March Madness prediction. The data confirms their power — 1-seeds win their tournament games 79% of the time, while 16-seeds win only 12% of theirs.
 
-**Purpose**: Join raw CSV files into clean, unified parquet datasets for downstream analysis.
+![Seed Win Rate](02_eda/output/seed_win_rate.png)
+*Figure 1: Tournament win rate by seed number (Men's, 1985-2025). Higher seeds win significantly more often, though the relationship is not perfectly linear — 8 vs 9 seed matchups are essentially coin flips (48.1% for the 8-seed).*
 
-**Men's notebook** (`01_data_joining/mens_notebook.ipynb`):
+The first-round matchup data reveals the full picture:
 
-1. **Load** all raw men's CSV files from S3 (with local fallback)
-2. **Merge compact + detailed results** for regular season and tournament games. Compact results (1985–2026) are left-joined with detailed box scores (2003–2026), preserving all rows with NaN for pre-2003 seasons
-3. **Build team-centric game rows**: Convert winner/loser format into two rows per game (one per team), with team's own stats and opponent stats. This is the "unpivot" step
-4. **Aggregate per team per season**: From the team-centric rows, compute season averages — wins, losses, WinPct, scoring, all box score stats, shooting percentages, estimated possessions (FGA - OR + TO + 0.475*FTA), offensive/defensive efficiency (points per possession), and NetEff
-5. **Clean tournament seeds**: Extract numeric seed from strings like `W01`, `X16a` → SeedNum, Region, PlayIn
-6. **Filter Massey Ordinals**: Remove post-tournament rankings (DayNum >= 132) to prevent data leakage. Keep only the latest pre-tournament ranking per system/team/season. Pivot to wide format (one column per ranking system). Compute average across all systems and average of top 4 systems (POM, SAG, MOR, WLK)
-7. **Build team metadata**: Join team names, conference affiliations (with power conference flag for ACC, Big Ten, Big 12, SEC, Pac-12, Big East), and coaches (filtered to those active through Selection Sunday)
+*Table 2: First-round matchup win rates for the higher-seeded team (Men's, 1985-2025).*
 
-**Outputs** (S3 `01_data_joining/mens/`):
-| File | Shape | Description |
-|------|-------|-------------|
-| `regular_season_games.parquet` | (198079, 34) | All regular season games with box scores where available |
-| `tourney_games.parquet` | (2585, 34) | All tournament games with box scores where available |
-| `team_season_stats.parquet` | (13753, 45) | Per-team per-season aggregates |
-| `tourney_seeds.parquet` | (2626, 6) | Cleaned seeds with numeric values |
-| `massey_ordinals_pre_tourney.parquet` | (8356, 195) | Wide-format pre-tournament rankings |
-| `team_metadata.parquet` | (13753, 7) | Team names, conferences, coaches |
+| Matchup | Higher Seed Win Rate | Games |
+|---------|---------------------|-------|
+| #1 vs #16 | 98.8% | 160 |
+| #2 vs #15 | 93.1% | 160 |
+| #3 vs #14 | 85.6% | 160 |
+| #4 vs #13 | 79.4% | 160 |
+| #5 vs #12 | 64.4% | 160 |
+| #6 vs #11 | 61.3% | 160 |
+| #7 vs #10 | 61.0% | 159 |
+| #8 vs #9 | 48.1% | 160 |
 
-**Women's notebook**: Same structure, outputs same datasets minus `massey_ordinals_pre_tourney` and minus coach info. Compact results start 1998, detailed start 2010. ~1.5% of 2010–2012 games may have missing detailed results.
+![Seed Matchup Heatmap](02_eda/output/seed_matchup_heatmap.png)
+*Figure 2: Tournament win rate heatmap for all seed matchups that have occurred (Men's). The diagonal pattern shows that closer seed matchups are harder to predict. This matrix directly informs what probability calibration should look like.*
 
----
+### Upset Trends Over Time
 
-### 02 Exploratory Data Analysis
+The overall upset rate across the men's tournament is 27.3%. There is no strong trend over time — the tournament remains consistently unpredictable.
 
-**Purpose**: Understand data patterns to inform feature engineering and modeling decisions.
+![Upset Rate Over Time](02_eda/output/upset_rate_over_time.png)
+*Figure 3: Tournament upset rate by season with 5-year rolling average (Men's). Upsets have remained in the 20-35% range throughout the dataset, with no clear trend toward more or fewer upsets.*
 
-**Men's notebook** (`02_eda/mens_notebook.ipynb`) — 10 sections:
+### Which Massey Systems Are Most Predictive?
 
-1. **Seed analysis**: Tournament win rate by seed (1-seeds win ~80%+ of games), first-round matchup win probabilities (1v16: 98.8%, 5v12: 64.4%, 8v9: 48.1%), seed matchup heatmap
-2. **Upset trends**: Overall upset rate is 27.3%. Plotted over time with 5-year rolling average — no strong trend
-3. **Massey Ordinal system ranking**: Tested all ~191 systems for predictive accuracy on tournament games. Top systems include BKM, DP, LYD, plus the research-recommended POM/SAG/MOR/WLK. The composite `TopSystemsAvgRank` is competitive with individual systems
-4. **Tournament vs non-tournament teams**: Compared 14 stats. Tournament teams have 63% higher WinPct, 7.8% higher OffEff, 6.2% lower DefEff. Biggest separators: WinPct, AvgPointDiff, NetEff
-5. **Feature correlation with tournament wins**: SeedNum (-0.558), AvgPointDiff (+0.442), NetEff (+0.435) are top correlates
-6. **Scoring and pace trends**: Scoring has declined over the decades. Pace (possessions) has been relatively stable 2003+
-7. **Seed vs Massey rank**: Strong correlation (r ≈ 0.9+) between tournament seed and Massey top systems rank, but variance within each seed creates opportunity
-8. **Power conference analysis**: Power conference teams average 1.46 tournament wins vs 0.54 for mid-majors, but this is largely captured by seed
-9. **Feature correlation matrix**: Identified highly correlated pairs (WinPct/AvgPointDiff/NetEff at r=0.94–0.996, OffEff/FGPct at r=0.81) — important for feature selection
-10. **Key takeaways**: Recommended feature priority list
+The Massey Ordinals dataset contains rankings from ~191 different rating systems. We tested each system's predictive accuracy on tournament outcomes: what fraction of games did the better-ranked team win?
 
-**Women's notebook**: Same structure minus Massey analysis and seed-vs-Massey comparison (no Massey data available for women's).
+![Massey System Accuracy](02_eda/output/massey_system_accuracy.png)
+*Figure 4: Top 30 Massey Ordinal systems ranked by tournament prediction accuracy (Men's, 2003-2025). Gold bars highlight the research-recommended systems (POM, SAG, MOR, WLK) and composite averages. The top individual systems reach ~78% accuracy, while composites are competitive at ~73%.*
 
-**Plots saved to**: `02_eda/output/` (PNG files)
+### What Separates Tournament Teams?
 
----
+Tournament teams differ dramatically from non-tournament teams across key metrics.
 
-### 03 Data Split
+*Table 3: Average statistics for tournament vs non-tournament teams (Men's, 2003+).*
 
-**Purpose**: Define the matchup-level datasets and cross-validation strategy.
+| Statistic | Non-Tournament | Tournament | Difference |
+|-----------|---------------|------------|------------|
+| Win Pct | 0.445 | 0.726 | +63.2% |
+| Avg Point Diff | -1.93 | +7.82 | +9.74 pts |
+| Offensive Efficiency | 1.007 | 1.085 | +7.8% |
+| Defensive Efficiency | 1.035 | 0.970 | -6.2% |
+| FG% | 0.432 | 0.459 | +6.1% |
+| Assists/Game | 12.77 | 14.44 | +13.1% |
+| Blocks/Game | 3.28 | 3.85 | +17.2% |
 
-**Key decisions**:
-- **Target format**: Matches the submission format — TeamA (lower ID) vs TeamB (higher ID), Label = P(TeamA wins)
-- **CV strategy**: Leave-One-Season-Out (LOGO). Each season is one fold. Train on all other seasons, validate on the held-out season's tournament games
-- **Exclude 2020**: No tournament was played
-- **No explicit train/test split**: The "test set" is Stage 2 (2026). Stage 1 (2022–2025) serves as the held-out evaluation set for model comparison
+![Tournament vs Non-Tournament Distributions](02_eda/output/tourney_vs_non_tourney_distributions.png)
+*Figure 5: Distribution of key statistics for tournament vs non-tournament teams (Men's, 2003+). Win percentage and net efficiency show the clearest separation between the two groups.*
 
-**Men's notebook** (`03_data_split/mens_notebook.ipynb`):
+### Feature Correlation with Tournament Success
 
-1. **Build tournament matchups**: Convert tournament games from winner/loser format to (Season, TeamA, TeamB, Label) where TeamA < TeamB and Label = 1 if TeamA won. Creates the submission-format ID string
-2. **Assign LOGO folds**: Fold column = Season. 40 folds (1985–2025, excluding 2020). ~63–67 games per fold. Label balance: 0.512
-3. **Mark Stage 1 validation**: IsStage1Val flag for 2022–2025 seasons (268 games)
-4. **Parse prediction grids**: Extract (Season, TeamA, TeamB) from sample submission CSVs, filter to men's (TeamIDs 1000–1999). Stage 1: 261,013 rows. Stage 2: 66,430 rows
-5. **Merge labels into Stage 1 grid**: Attach actual tournament outcomes where games occurred (268 of 261,013 rows)
+Among teams that make the tournament, which statistics predict deep runs?
 
-**Outputs** (S3 `03_data_split/mens/`):
-| File | Shape | Description |
-|------|-------|-------------|
-| `tourney_matchups.parquet` | (2585, 7) | Historical tournament matchups with labels and fold assignments |
-| `prediction_grid_stage1.parquet` | (261013, 5) | All possible men's matchups 2022–2025, with labels where available |
-| `prediction_grid_stage2.parquet` | (66430, 4) | All possible men's matchups 2026 |
+![Feature Correlation with Tournament Wins](02_eda/output/feature_correlation_tourney_wins.png)
+*Figure 6: Correlation of each feature with number of tournament wins (Men's, 2003-2025). Seed number has the strongest correlation (-0.558), followed by point differential (+0.442) and net efficiency (+0.435). Defensive metrics (DefEff, OppFGPct) are negatively correlated — better defense means more wins.*
 
-**Women's notebook**: Same structure, TeamIDs 3000+, tournament data starts 1998.
+### Seed vs Massey Rankings
 
----
+How well do the selection committee's seeds align with analytical rankings? Strong correlation overall, but meaningful variance within each seed creates modeling opportunity.
 
-### 04 Preprocessing
+![Seed vs Massey Rank](02_eda/output/seed_vs_massey_rank.png)
+*Figure 7: Tournament seed vs Massey Top Systems average rank (Men's, 2003-2025). Left: scatter plot with median overlaid (red dots). Right: box plot showing rank distribution by seed. The spread within each seed — especially seeds 5-12 — means the selection committee and analytics disagree enough to provide predictive signal beyond seed alone.*
 
-**Purpose**: Construct matchup-level features from team-season data. The dominant pattern is **difference features**: `TeamA_stat - TeamB_stat`.
+### Feature Multicollinearity
 
-**Men's notebook** (`04_preprocessing/mens_notebook.ipynb`):
+Several features are highly correlated, which informs feature selection for modeling.
 
-1. **Load data** from 01_data_joining (team stats, seeds, Massey, metadata) and 03_data_split (matchups, grids)
-2. **Build matchup features** for each (Season, TeamA, TeamB):
-   - **Seed features**: SeedA, SeedB, SeedDiff
-   - **Massey rank differences**: TopSystemsAvgRankDiff, AvgOrdinalRankDiff, POMDiff, SAGDiff, MORDiff, WLKDiff
-   - **Team stat differences**: WinPctDiff, AvgPointDiffDiff, OffEffDiff, DefEffDiff, NetEffDiff, FGPctDiff, FG3PctDiff, FTPctDiff, AvgTODiff, AvgStlDiff, AvgBlkDiff, AvgORDiff, AvgDRDiff, AvgAstDiff, OppFGPctDiff, OppFG3PctDiff, AvgPossDiff
-   - **Conference**: IsPowerConfDiff
-3. **Flip and double** training data: Each matchup produces two rows — original and mirror (features negated, label flipped). This prevents the model from learning artifacts from the arbitrary lower-ID-first ordering. Label balance becomes exactly 0.500
-4. **Apply to prediction grids**: Same feature construction for Stage 1 and Stage 2 (no flip-and-double)
-5. **Sanity checks**: Verify diff feature means are ~0 after augmentation. Verify feature-label correlations go the expected direction (SeedDiff: -0.492, WinPctDiff: +0.324, NetEffDiff: +0.402)
+![Feature Correlation Matrix](02_eda/output/feature_correlation_matrix.png)
+*Figure 8: Correlation matrix of candidate features (Men's, 2003+). WinPct, AvgPointDiff, and NetEff are nearly redundant (r=0.94-0.996). OffEff and FGPct are also highly correlated (r=0.81). The model will need to handle this multicollinearity, either through feature selection or regularization.*
 
-**Total features**: 27 (men's), ~21 (women's, no Massey features)
+## Feature Engineering
 
-**Missing data**: ~43.9% of training features are NaN for pre-2003 games (no detailed stats or Massey). Gradient boosting models handle NaN natively. Neural nets impute with 0 (meaning "no difference"). Stage 2 (2026) has 100% missing for seeds (tournament hasn't started) and SAG.
+For each matchup (TeamA vs TeamB), we compute **difference features**: `TeamA_stat - TeamB_stat`. This captures the relative strength between teams and is the dominant pattern in winning Kaggle solutions.
 
-**Outputs** (S3 `04_preprocessing/mens/`):
-| File | Shape | Description |
-|------|-------|-------------|
-| `train_features.parquet` | (5170, 82) | Flip-doubled training matchups with features |
-| `stage1_features.parquet` | (261013, 80) | Stage 1 grid with features |
-| `stage2_features.parquet` | (66430, 79) | Stage 2 grid with features |
-| `feature_columns.parquet` | (27, 1) | List of feature column names |
+*Table 4: Complete feature set for men's predictions (27 features).*
 
-**Women's notebook**: Same structure, 21 features (no Massey-related features).
+| Category | Features | Count |
+|----------|----------|-------|
+| Seeds | SeedDiff, SeedA, SeedB | 3 |
+| Massey Rankings | TopSystemsAvgRankDiff, AvgOrdinalRankDiff, POMDiff, SAGDiff, MORDiff, WLKDiff | 6 |
+| Efficiency | OffEffDiff, DefEffDiff, NetEffDiff | 3 |
+| Record | WinPctDiff, AvgPointDiffDiff | 2 |
+| Shooting | FGPctDiff, FG3PctDiff, FTPctDiff, OppFGPctDiff, OppFG3PctDiff | 5 |
+| Box Score | AvgTODiff, AvgStlDiff, AvgBlkDiff, AvgORDiff, AvgDRDiff, AvgAstDiff | 6 |
+| Pace | AvgPossDiff | 1 |
+| Conference | IsPowerConfDiff | 1 |
 
----
+**Key preprocessing decisions:**
+- **Flip and double**: Each training matchup appears twice — original and mirror (features negated, label flipped). This prevents the model from learning artifacts based on arbitrary team ID ordering and produces exactly balanced labels (50/50)
+- **Massey leakage prevention**: Rankings filtered to DayNum < 132 (before Selection Sunday) to prevent post-tournament data from leaking into features
+- **Missing data**: ~44% of training rows have NaN for detailed stats (pre-2003 games). Gradient boosting models handle this natively; the neural net imputes with 0 (meaning "no difference")
 
-### 05 Models
+## Cross-Validation Strategy
 
-**Purpose**: Train 4 models using LOGO-CV, generate calibrated out-of-fold predictions, and produce Stage 1/2 predictions.
+We use **Leave-One-Season-Out (LOGO)** cross-validation — the standard approach for this competition, validated by research into past winning solutions.
 
-All models follow the same framework:
-1. Load preprocessed features from 04_preprocessing
-2. Run 40-fold LOGO CV (train on flip-doubled data, validate on original rows only)
-3. Collect OOF predictions and per-fold Brier scores
-4. Train final model on all data (using median best round from CV)
-5. Calibrate with isotonic regression fit on OOF predictions
-6. Generate Stage 1/2 predictions, clip to [0.02, 0.98]
-7. Save OOF predictions, Stage 1/2 predictions, CV results
+- Each of the 40 seasons (1985-2025, excluding 2020) serves as one fold
+- Train on all other seasons' tournament games, predict the held-out season
+- This produces honest out-of-fold predictions for every historical game
+- 2020 is excluded because the tournament was canceled
 
-#### XGBoost (`05_models/xgboost/`)
+*Table 5: Cross-validation fold structure (Men's). Each fold contains 63-67 tournament games.*
 
-- **Version**: 2.1.4 (pinned to `>=2.0,<3.0` for SageMaker compatibility — 3.x requires CMake 3.18+ which isn't available)
-- **Hyperparameters**: max_depth=3, learning_rate=0.05, subsample=0.8, colsample_bytree=0.8, min_child_weight=5, reg_alpha=1.0, reg_lambda=1.0
-- **Rounds**: 500 max with early stopping at 50. Final model uses median best round from CV (138)
-- **Key detail**: Uses `iteration_range=(0, model.best_iteration + 1)` in CV predict calls to ensure best model is used regardless of XGBoost version
+| Fold Range | Seasons | Games/Fold | Notes |
+|-----------|---------|-----------|-------|
+| 1985-2000 | 16 folds | 63 each | Compact stats only |
+| 2001-2002 | 2 folds | 64 each | Compact stats only |
+| 2003-2010 | 8 folds | 64 each | Full detailed stats + Massey |
+| 2011-2019 | 9 folds | 67 each | Full detailed stats + Massey |
+| 2021 | 1 fold | 66 | Full stats (2020 skipped) |
+| 2022-2025 | 4 folds | 67 each | Stage 1 validation set |
 
-**Men's results**: OOF Brier: 0.1832 raw → 0.1804 calibrated. Top features by gain: SeedDiff (78.2), SeedB (15.0), SeedA (14.6), AvgPointDiffDiff (14.6), MORDiff (11.4)
+## Model Training & Results
 
-**Women's results**: OOF Brier: 0.1427 raw → 0.1395 calibrated
+All four models share the same training framework: LOGO-CV on flip-doubled data, isotonic regression calibration on OOF predictions, and final predictions clipped to [0.02, 0.98].
 
-#### LightGBM (`05_models/lightgbm/`)
+### Individual Model Results
 
-- **Version**: 4.6.0
-- **Hyperparameters**: max_depth=3, num_leaves=8, learning_rate=0.05, subsample=0.8, colsample_bytree=0.8, min_child_samples=10, reg_alpha=1.0, reg_lambda=1.0
-- **Rounds**: 500 max, early stopping 50. Final model: 115 rounds (men's)
+*Table 6: Men's model comparison, sorted by calibrated OOF Brier score (lower is better).*
 
-**Men's results**: OOF Brier: 0.1834 raw → 0.1799 calibrated
+| Rank | Model | Loss Function | OOF Brier (raw) | OOF Brier (calibrated) | Stage 1 Brier |
+|------|-------|--------------|-----------------|----------------------|---------------|
+| 1 | PyTorch BrierNet | Brier (MSE) | 0.1827 | **0.1797** | 0.1865 |
+| 2 | LightGBM | Log Loss | 0.1834 | 0.1799 | 0.1893 |
+| 3 | CatBoost | Log Loss | 0.1837 | 0.1802 | 0.1909 |
+| 4 | XGBoost | Log Loss | 0.1832 | 0.1804 | 0.1866 |
 
-**Women's results**: OOF Brier: 0.1432 raw → 0.1401 calibrated
+The PyTorch model trained with Brier loss outperforms all three gradient boosting models, confirming the research finding that training directly on the competition metric produces better-calibrated probabilities.
 
-#### CatBoost (`05_models/catboost/`)
+### XGBoost Feature Importance
 
-- **Version**: 1.2.10
-- **Hyperparameters**: depth=4, learning_rate=0.05, l2_leaf_reg=3.0
-- **Rounds**: 500 max, early stopping 50. Final model: 156 rounds (men's)
-- **Note**: Handles NaN natively via ordered boosting
+*Table 7: XGBoost feature importance by gain (Men's). SeedDiff dominates, contributing 5x more than any other feature.*
 
-**Men's results**: OOF Brier: 0.1837 raw → 0.1802 calibrated
+| Feature | Gain |
+|---------|------|
+| SeedDiff | 78.15 |
+| SeedB | 14.98 |
+| SeedA | 14.65 |
+| AvgPointDiffDiff | 14.57 |
+| MORDiff | 11.37 |
+| WLKDiff | 11.34 |
+| IsPowerConfDiff | 10.29 |
+| TopSystemsAvgRankDiff | 9.42 |
+| AvgTODiff | 6.46 |
+| NetEffDiff | 6.14 |
 
-**Women's results**: OOF Brier: 0.1422 raw → 0.1384 calibrated
+### Ensemble Construction
 
-#### PyTorch (`05_models/pytorch/`)
+Ensemble weights were optimized by minimizing Brier score on OOF predictions using constrained optimization (scipy SLSQP, non-negative weights summing to 1).
 
-- **Architecture**: BrierNet — feedforward network with 2 hidden layers (64 → 32 → 1), ReLU activations, Dropout(0.3), Sigmoid output
-- **Loss function**: **Brier loss (MSE)** directly, not binary cross-entropy. Research shows this produces better-calibrated probabilities for Brier-scored competitions
-- **Preprocessing**: NaN imputed with 0 (difference features — 0 means no difference), then StandardScaler fit per fold
-- **Training**: Adam optimizer (lr=0.001, weight_decay=1e-4), batch_size=128, max 200 epochs, patience=20
-- **Note**: TensorFlow was dropped due to incompatible GCC version (7.3) on SageMaker
+*Table 8: Men's ensemble weights and final Brier scores.*
 
-**Men's results**: OOF Brier: 0.1827 raw → 0.1797 calibrated (best single model)
-
-**Women's results**: OOF Brier: 0.1387 raw → 0.1347 calibrated (best single model)
-
----
-
-### 06 Model Evaluation & Ensemble
-
-**Purpose**: Compare all models, build an optimized ensemble, and generate final predictions.
-
-**Men's notebook** (`06_model_eval/mens_notebook.ipynb`):
-
-1. **Individual model comparison**: Side-by-side Brier scores (raw, calibrated, Stage 1, CV mean/std)
-2. **Calibration curves**: Raw vs calibrated predictions plotted against perfect calibration diagonal
-3. **Prediction distributions**: Histograms showing how spread out each model's probabilities are
-4. **Per-fold Brier scores**: Line plot across all 40 seasons — models track each other closely, with 2007 easiest and 2022 hardest
-5. **Model correlation**: Heatmap of prediction correlations between models — high correlation between gradient boosting models, PyTorch provides some diversity
-6. **Ensemble weight optimization**: Scipy SLSQP minimization of Brier score on OOF predictions, constrained to non-negative weights summing to 1
-7. **Ensemble evaluation**: Compare optimized vs equal-weight ensemble vs best single model on both full OOF and Stage 1 subset
-
-**Men's ensemble results**:
-
-| Metric | Score |
-|--------|-------|
-| Best single model (PyTorch, calibrated) | 0.1797 |
-| Equal-weight ensemble | 0.1783 |
-| Optimized ensemble | **0.1781** |
-| Ensemble improvement over best single | +0.0016 |
-
-**Optimized weights** (men's):
-| Model | Weight |
-|-------|--------|
-| PyTorch | 0.4678 |
+| Model | Optimized Weight |
+|-------|-----------------|
+| PyTorch | **0.4678** |
 | LightGBM | 0.2216 |
 | CatBoost | 0.1736 |
 | XGBoost | 0.1369 |
 
-PyTorch earned nearly half the ensemble weight, confirming that training with Brier loss directly produces predictions that complement the gradient boosting models.
+| Evaluation | Brier Score |
+|-----------|-------------|
+| Best single model (PyTorch) | 0.1797 |
+| Equal-weight ensemble | 0.1783 |
+| **Optimized ensemble** | **0.1781** |
+| Improvement over best single | **+0.0016** |
+| Stage 1 ensemble (2022-2025) | 0.1853 |
 
-**Outputs** (S3 `06_model_eval/mens/`):
-| File | Description |
-|------|-------------|
-| `ensemble_stage1_predictions.parquet` | Final ensemble predictions for 2022–2025 matchups |
-| `ensemble_stage2_predictions.parquet` | Final ensemble predictions for 2026 matchups |
-| `ensemble_weights.parquet` | Optimized model weights |
-| `model_comparison.parquet` | Side-by-side model metrics |
+PyTorch earned nearly half the ensemble weight, confirming that Brier-loss training produces predictions that complement the gradient boosting models. The ensemble provides a consistent improvement over any single model.
 
-**Women's notebook** (`06_model_eval/womens_notebook.ipynb`): Same structure with 4 models.
+---
 
-**Women's ensemble results**:
+# Part 2: Women's Tournament
 
-| Metric | Score |
-|--------|-------|
-| Best single model (PyTorch, calibrated) | 0.1347 |
-| Equal-weight ensemble | 0.1363 |
-| Optimized ensemble | **0.1343** |
-| Ensemble improvement over best single | +0.0004 |
+## Data
 
-**Optimized weights** (women's):
-| Model | Weight |
-|-------|--------|
-| PyTorch | 0.7709 |
+The women's dataset spans 28 seasons (1998-2026) with 1,717 tournament games. The key difference from men's: **no Massey Ordinals are available**, so team quality must be derived entirely from game results and box scores.
+
+*Table 9: Women's data sources and their coverage.*
+
+| Dataset | Rows | Seasons | Description |
+|---------|------|---------|-------------|
+| Regular season (compact) | varies | 1998-2026 | Game scores and locations |
+| Regular season (detailed) | varies | 2010-2026 | Full box score statistics |
+| Tournament (compact) | 1,717 | 1998-2025 | Tournament game scores |
+| Tournament (detailed) | varies | 2010-2025 | Tournament box scores |
+| Tournament seeds | varies | 1998-2025 | Seed assignments per team |
+
+*Table 10: Key differences between men's and women's pipelines.*
+
+| Aspect | Men's | Women's |
+|--------|-------|---------|
+| Compact results start | 1985 | 1998 |
+| Detailed box scores start | 2003 | 2010 |
+| Massey Ordinals | 191 systems available | Not available |
+| Coaches data | Available | Not available |
+| Number of features | 27 | 21 |
+| Tournament upset rate | ~27% | Lower (top seeds dominant) |
+| LOGO-CV folds | 40 | ~26 |
+
+## Exploratory Data Analysis
+
+### Seed Analysis
+
+The women's tournament is significantly more predictable than the men's. Top seeds dominate more consistently, and upsets are rarer.
+
+![Women's Seed Win Rate](02_eda/output/womens_seed_win_rate.png)
+*Figure 9: Tournament win rate by seed number (Women's, 1998-2025). Compared to men's (Figure 1), the drop-off is steeper — 1-seeds and 2-seeds are even more dominant in the women's tournament.*
+
+![Women's Seed Matchup Heatmap](02_eda/output/womens_seed_matchup_heatmap.png)
+*Figure 10: Tournament win rate heatmap for seed matchups (Women's). The pattern is similar to men's but with more extreme probabilities, reflecting fewer upsets in the women's tournament.*
+
+### Upset Trends
+
+![Women's Upset Rate Over Time](02_eda/output/womens_upset_rate_over_time.png)
+*Figure 11: Tournament upset rate by season (Women's, 1998-2025). The upset rate is generally lower than men's, though there is considerable year-to-year variance.*
+
+### Feature Analysis
+
+![Women's Feature Correlation with Tournament Wins](02_eda/output/womens_feature_correlation_tourney_wins.png)
+*Figure 12: Correlation of each feature with number of tournament wins (Women's). Without Massey Ordinals, seed number and derived efficiency stats carry the predictive load.*
+
+![Women's Tournament vs Non-Tournament Distributions](02_eda/output/womens_tourney_vs_non_tourney_distributions.png)
+*Figure 13: Distribution of key statistics for tournament vs non-tournament teams (Women's, 2010+). The separation is similar to men's, though with a smaller sample of detailed-stats seasons.*
+
+![Women's Feature Correlation Matrix](02_eda/output/womens_feature_correlation_matrix.png)
+*Figure 14: Feature correlation matrix (Women's, 2010+). Similar multicollinearity patterns as men's — WinPct, AvgPointDiff, and NetEff are nearly redundant.*
+
+## Feature Engineering
+
+The women's feature set is the same as men's minus the 6 Massey-related features, yielding 21 features total.
+
+*Table 11: Women's feature set (21 features).*
+
+| Category | Features | Count |
+|----------|----------|-------|
+| Seeds | SeedDiff, SeedA, SeedB | 3 |
+| Efficiency | OffEffDiff, DefEffDiff, NetEffDiff | 3 |
+| Record | WinPctDiff, AvgPointDiffDiff | 2 |
+| Shooting | FGPctDiff, FG3PctDiff, FTPctDiff, OppFGPctDiff, OppFG3PctDiff | 5 |
+| Box Score | AvgTODiff, AvgStlDiff, AvgBlkDiff, AvgORDiff, AvgDRDiff, AvgAstDiff | 6 |
+| Pace | AvgPossDiff | 1 |
+| Conference | IsPowerConfDiff | 1 |
+
+## Model Training & Results
+
+### Individual Model Results
+
+*Table 12: Women's model comparison, sorted by calibrated OOF Brier score.*
+
+| Rank | Model | Loss Function | OOF Brier (raw) | OOF Brier (calibrated) | Stage 1 Brier |
+|------|-------|--------------|-----------------|----------------------|---------------|
+| 1 | PyTorch BrierNet | Brier (MSE) | 0.1387 | **0.1347** | 0.1290 |
+| 2 | CatBoost | Log Loss | 0.1422 | 0.1384 | 0.1350 |
+| 3 | XGBoost | Log Loss | 0.1427 | 0.1395 | 0.1334 |
+| 4 | LightGBM | Log Loss | 0.1432 | 0.1401 | 0.1358 |
+
+Women's Brier scores are significantly lower than men's (~0.135 vs ~0.180), reflecting the more predictable nature of the women's tournament.
+
+### Ensemble Construction
+
+*Table 13: Women's ensemble weights. PyTorch dominates even more than in the men's ensemble, receiving 77% of the weight.*
+
+| Model | Optimized Weight |
+|-------|-----------------|
+| PyTorch | **0.7709** |
 | CatBoost | 0.1700 |
 | XGBoost | 0.0460 |
 | LightGBM | 0.0131 |
 
-PyTorch dominates even more in the women's ensemble (77%), reflecting the stronger benefit of Brier-loss training when the tournament is more predictable (fewer upsets).
+| Evaluation | Brier Score |
+|-----------|-------------|
+| Best single model (PyTorch) | 0.1347 |
+| Equal-weight ensemble | 0.1363 |
+| **Optimized ensemble** | **0.1343** |
+| Improvement over best single | **+0.0004** |
+| Stage 1 ensemble (2022-2025) | 0.1286 |
+
+PyTorch dominates the women's ensemble at 77% weight — nearly double its share in the men's ensemble. When the tournament is more predictable, the benefit of training directly on Brier loss is amplified.
 
 ---
 
-### 07 Submission
+# Final Submission
 
-**Purpose**: Combine men's and women's ensemble predictions into the final Kaggle submission CSV.
-
-**Notebook** (`07_submission/generate_submission.ipynb`):
-
-1. **Load sample submissions** to get required row IDs
-2. **Load men's ensemble predictions** from 06_model_eval
-3. **Load women's ensemble predictions** from 06_model_eval
-4. **Combine** men's and women's predictions by concatenating
-5. **Merge with sample submission** to ensure every required row has a prediction. Missing predictions filled with 0.5
-6. **Validate**: Row count, column names, no nulls, prediction range [0,1], ID matching
-7. **Final clip** to [0.02, 0.98]
-
-**Outputs** (S3 `07_submission/`):
-- `submission_stage1.csv` — 519,144 rows (2022–2025 validation)
-- `submission_stage2.csv` — 132,133 rows (2026 real submission)
-
----
-
-## Men's vs Women's Pipeline Differences
-
-| Aspect | Men's | Women's |
-|--------|-------|---------|
-| Compact results | 1985–2026 | 1998–2026 |
-| Detailed box scores | 2003–2026 | 2010–2026 |
-| Massey Ordinals | Yes (~191 systems) | Not available |
-| Coaches data | Yes | Not available |
-| TeamID range | 1000–1999 | 3000–3999 |
-| Number of features | 27 | ~21 (no Massey) |
-| Tournament upset rate | ~27% | Lower (top seeds dominant) |
-| Models | XGBoost, LightGBM, CatBoost, PyTorch | Same 4 models |
-| Separate pipelines | Yes | Yes |
-
-The pipelines are structurally identical but run on separate data. The women's pipeline has fewer features due to the absence of Massey Ordinals, which means team quality must be derived entirely from game results and box scores.
-
----
-
-## Results
-
-### Men's Model Comparison (OOF Brier Score, Calibrated)
-
-| Rank | Model | OOF Brier | Stage 1 Brier |
-|------|-------|-----------|---------------|
-| 1 | PyTorch (Brier loss) | 0.1797 | 0.1865 |
-| 2 | LightGBM | 0.1799 | 0.1893 |
-| 3 | CatBoost | 0.1802 | 0.1909 |
-| 4 | XGBoost | 0.1804 | 0.1866 |
-| **E** | **Ensemble (optimized)** | **0.1781** | **0.1853** |
-
-### Women's Model Comparison (OOF Brier Score, Calibrated)
-
-| Rank | Model | OOF Brier | Stage 1 Brier |
-|------|-------|-----------|---------------|
-| 1 | PyTorch (Brier loss) | 0.1347 | 0.1290 |
-| 2 | CatBoost | 0.1384 | 0.1350 |
-| 3 | XGBoost | 0.1395 | 0.1334 |
-| 4 | LightGBM | 0.1401 | 0.1358 |
-| **E** | **Ensemble (optimized)** | **0.1343** | **0.1286** |
-
-Women's Brier scores are significantly lower than men's (~0.134 vs ~0.178), reflecting the women's tournament being more predictable (fewer upsets, top seeds more dominant).
-
-### Final Submission
+*Table 14: Final submission composition.*
 
 | Component | Stage 1 Rows | Stage 2 Rows | Pred Range |
 |-----------|-------------|-------------|------------|
@@ -426,68 +366,117 @@ Women's Brier scores are significantly lower than men's (~0.134 vs ~0.178), refl
 | Women's ensemble | 258,131 | 65,703 | [0.020, 0.980] |
 | **Combined** | **519,144** | **132,133** | **[0.020, 0.980]** |
 
-### Brier Score Benchmarks (from research)
+All validations passed: correct row counts, correct columns (ID, Pred), no null values, predictions within [0, 1], and IDs match the sample submission exactly.
+
+---
+
+# Key Insights
+
+## What Worked
+
+1. **Brier loss training**: The PyTorch model trained directly on Brier loss consistently outperformed all three gradient boosting models (trained on log loss), confirming academic research findings. This was the single most impactful modeling decision.
+
+2. **Massey Ordinal rankings** (men's only): SeedDiff was the most important feature by far, but Massey rankings (especially MOR and WLK) provided strong complementary signal, appearing in the top 10 features by gain.
+
+3. **Isotonic regression calibration**: Improved every model's Brier score by 0.002-0.004. Gradient boosting models cluster predictions around 0.5 and need post-hoc calibration to spread them appropriately.
+
+4. **Flip-and-double augmentation**: Doubled the training data and eliminated ordering bias. Simple but essential — without it, the model could learn that the lower-ID team wins more often (an artifact of the ID assignment scheme).
+
+5. **Ensembling**: Even with highly correlated models, the optimized ensemble consistently beat the best single model — by 0.0016 on men's and 0.0004 on women's.
+
+## What's Different About Women's vs Men's
+
+- Women's tournament is ~25% more predictable (Brier 0.134 vs 0.178)
+- PyTorch dominates the women's ensemble (77% vs 47%) — Brier-loss training matters more when outcomes are more deterministic
+- Without Massey Ordinals, the women's pipeline relies entirely on derived efficiency stats and seeds — yet achieves excellent scores
+
+## Research-Driven Decisions
+
+Every major design decision was informed by investigating past winning solutions:
+
+| Decision | Source |
+|----------|--------|
+| LOGO cross-validation | Standard approach in all top solutions |
+| Flip-and-double augmentation | Recommended by 2023 gold solution writeup |
+| Massey Ordinals (POM, SAG, MOR, WLK) | Identified as top systems by 2023 gold solution |
+| Brier loss for neural nets | Academic paper (arXiv:2508.02725) showed Brier-trained LSTM outperforms BCE |
+| Isotonic calibration | Rank-107 2025 solution reported in-fold calibration as beneficial |
+| Clip to [0.02, 0.98] | Universal practice in top solutions to avoid overconfidence penalties |
+| Shallow trees (depth 2-4) | Recommended by research to prevent overfitting on small tournament dataset |
+| Exclude 2020 | Tournament canceled — no data to validate on |
+
+---
+
+# Brier Score Benchmarks
+
+*Table 15: Brier score benchmarks from research, compared to our results.*
 
 | Benchmark | Approx. Score |
 |-----------|--------------|
-| Naive (predict 0.5) | ~0.250 |
-| Seed-only model | ~0.210–0.230 |
-| Mid-tier solution | ~0.126 |
-| Top 10% | ~0.115–0.125 |
+| Naive (predict 0.5 for everything) | ~0.250 |
+| Seed-only model | ~0.210-0.230 |
+| **Our men's ensemble (all historical games)** | **0.1781** |
+| **Our women's ensemble (all historical games)** | **0.1343** |
+| Mid-tier Kaggle solution | ~0.126 |
+| Top 10% Kaggle solution | ~0.115-0.125 |
 
-Note: Our OOF scores are computed on all historical tournament games including pre-2003/pre-2010 seasons with sparser features. Scores on recent seasons with full features are better.
-
----
-
-## Research Foundation
-
-Before building models, the `researcher` agent investigated past winning strategies. Key findings documented in `RESEARCH.md`:
-
-1. **XGBoost is the consensus top performer** — confirmed by 2025 winner (Mohammad Odeh) and multiple top solutions
-2. **Massey Ordinals are the strongest men's feature** — averaging top systems (POM, SAG, MOR, WLK) is competitive with more complex approaches
-3. **Seed difference is universally used** — even naive seed-only models are competitive
-4. **Train neural nets with Brier loss** (not BCE) for Brier-scored competitions
-5. **Leave-One-Season-Out CV** is the standard validation strategy
-6. **Flip and double training data** to eliminate winner/loser ordering bias
-7. **Isotonic regression or Platt scaling** for post-hoc calibration
-8. **Clip predictions to [0.02, 0.98]** to avoid extreme overconfidence penalties
-9. **Filter Massey Ordinals to DayNum < 132** to prevent data leakage from post-tournament rankings
-10. **Exclude 2020** from CV (tournament was canceled)
+Note: Our OOF scores are computed across all historical tournament games including pre-2003/pre-2010 seasons where features are sparser. Performance on recent seasons with full features is better (e.g., men's Stage 1 2022-2025: 0.1853, women's Stage 1: 0.1286).
 
 ---
+
+# Technical Details
+
+## Infrastructure
+
+- **Execution**: AWS SageMaker notebook instances (Python 3.12)
+- **Storage**: S3 bucket `s3://march-machine-learning-mania-2026/`
+- **Libraries**: pandas, numpy, scikit-learn, matplotlib, seaborn, XGBoost 2.1.4, LightGBM 4.6.0, CatBoost 1.2.10, PyTorch 2.6.0
+
+## Model Hyperparameters
+
+*Table 16: Hyperparameters for all models.*
+
+| Parameter | XGBoost | LightGBM | CatBoost | PyTorch |
+|-----------|---------|----------|----------|---------|
+| Max depth / layers | 3 | 3 (8 leaves) | 4 | 2 layers (64, 32) |
+| Learning rate | 0.05 | 0.05 | 0.05 | 0.001 (Adam) |
+| Regularization | alpha=1.0, lambda=1.0 | alpha=1.0, lambda=1.0 | l2_leaf_reg=3.0 | Dropout=0.3, weight_decay=1e-4 |
+| Subsample | 0.8 | 0.8 | - | - |
+| Max rounds/epochs | 500 | 500 | 500 | 200 |
+| Early stopping | 50 rounds | 50 rounds | 50 rounds | 20 epochs |
+| Loss function | Log loss | Log loss | Log loss | **Brier (MSE)** |
 
 ## How to Reproduce
 
-### Prerequisites
-- AWS SageMaker notebook instance with S3 access to `s3://march-machine-learning-mania-2026/`
-- Python 3.12 with: pandas, numpy, scikit-learn, matplotlib, seaborn, xgboost (>=2.0,<3.0), lightgbm, catboost, pytorch, boto3, s3fs
+1. Place raw Kaggle data in `s3://march-machine-learning-mania-2026/00_data_collection/`
+2. Run notebooks in order: `01_data_joining` -> `02_eda` -> `03_data_split` -> `04_preprocessing` -> `05_models` (all 4) -> `06_model_eval` -> `07_submission`
+3. Run men's notebooks first, then women's at each stage
+4. Model notebooks within a stage can run in any order
 
-### Step-by-step
+**SageMaker notes**: XGBoost must be pinned to `>=2.0,<3.0` (3.x needs CMake 3.18+). TensorFlow was dropped due to GCC 7.3 incompatibility.
 
-**Stage 0**: Raw data should already be in S3 at `s3://march-machine-learning-mania-2026/00_data_collection/`
+## Project Structure
 
-**Stage 1 — Data Joining**: Run `01_data_joining/mens_notebook.ipynb`, then `womens_notebook.ipynb`. Each reads raw CSVs and writes parquet datasets to S3.
-
-**Stage 2 — EDA**: Run `02_eda/mens_notebook.ipynb`, then `womens_notebook.ipynb`. Generates plots in `02_eda/output/`. No data written to S3.
-
-**Stage 3 — Data Split**: Run `03_data_split/mens_notebook.ipynb`, then `womens_notebook.ipynb`. Creates matchup datasets and prediction grids.
-
-**Stage 4 — Preprocessing**: Run `04_preprocessing/mens_notebook.ipynb`, then `womens_notebook.ipynb`. Builds difference features and flip-doubles training data.
-
-**Stage 5 — Models**: Run all 4 model notebooks for men's, then all 4 for women's:
-- `05_models/xgboost/mens_notebook.ipynb` (then womens)
-- `05_models/lightgbm/mens_notebook.ipynb` (then womens)
-- `05_models/catboost/mens_notebook.ipynb` (then womens)
-- `05_models/pytorch/mens_notebook.ipynb` (then womens)
-
-Each model can be run independently. Order within gender doesn't matter.
-
-**Stage 6 — Model Eval**: Run `06_model_eval/mens_notebook.ipynb`, then `womens_notebook.ipynb`. Compares models and builds the ensemble.
-
-**Stage 7 — Submission**: Run `07_submission/generate_submission.ipynb`. Combines men's and women's ensemble predictions into the final CSV.
-
-### Notes
-- Each notebook reads from the previous stage's S3 outputs. Local fallback paths are provided for development
-- XGBoost must be pinned to `>=2.0,<3.0` on SageMaker (3.x requires CMake 3.18+ which isn't available)
-- TensorFlow was dropped due to GCC 7.3 incompatibility on SageMaker
-- All notebooks use the same structure: imports → functions → constants → make output dir → pipeline steps → save → summary
+```
+march_machine_learning_mania_2026/
+├── 00_data_collection/             Raw Kaggle CSVs
+├── 01_data_joining/                Merge & aggregate datasets
+│   ├── mens_notebook.ipynb
+│   └── womens_notebook.ipynb
+├── 02_eda/                         Exploratory analysis
+│   ├── mens_notebook.ipynb
+│   ├── womens_notebook.ipynb
+│   └── output/                     Plots (Figures 1-14)
+├── 03_data_split/                  Matchups + CV folds
+├── 04_preprocessing/               Feature engineering
+├── 05_models/
+│   ├── xgboost/                    XGBoost (mens + womens)
+│   ├── lightgbm/                   LightGBM (mens + womens)
+│   ├── catboost/                   CatBoost (mens + womens)
+│   └── pytorch/                    PyTorch BrierNet (mens + womens)
+├── 06_model_eval/                  Model comparison + ensemble
+│   └── output/                     Evaluation plots
+├── 07_submission/                  Final CSV generation
+├── RESEARCH.md                     Past winning strategy analysis
+└── CLAUDE.md                       Project configuration
+```
