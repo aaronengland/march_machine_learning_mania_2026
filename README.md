@@ -11,10 +11,10 @@ This project builds a full ML pipeline to predict the probability of every possi
 | | Men's | Women's |
 |---|---|---|
 | **Training games** | 2,585 tournament matchups (1985-2025) | 1,717 tournament matchups (1998-2025) |
-| **Features** | 27 (seeds, Massey rankings, efficiency stats, box scores) | 21 (seeds, efficiency stats, box scores — no Massey) |
-| **Models** | XGBoost, LightGBM, CatBoost, PyTorch | XGBoost, LightGBM, CatBoost, PyTorch |
-| **Best single model** | PyTorch (Brier: 0.1797) | PyTorch (Brier: 0.1347) |
-| **Final ensemble** | **Brier: 0.1781** | **Brier: 0.1343** |
+| **Features** | 38 (seeds, Massey rankings, Elo, efficiency, SOS, box scores, recent form) | 33 (seeds, synthetic rankings, Elo, efficiency, SOS, box scores, recent form) |
+| **Models** | XGBoost, PyTorch, Logistic Regression | CatBoost, PyTorch, Logistic Regression |
+| **Best single model** | PyTorch (Brier: 0.1785) | PyTorch (Brier: 0.1358) |
+| **Final ensemble** | **Brier: 0.1772** | **Brier: 0.1349** |
 | **Predictions generated** | 66,430 matchups | 65,703 matchups |
 
 ---
@@ -34,11 +34,11 @@ The pipeline runs in 8 stages, with separate men's and women's notebooks at each
         |
 04_preprocessing/       Difference features + flip-and-double augmentation
         |
-05_models/              4 models x LOGO-CV + isotonic calibration
-   |  xgboost/            XGBoost (max_depth=3, lr=0.05)
-   |  lightgbm/           LightGBM (num_leaves=8, lr=0.05)
-   |  catboost/           CatBoost (depth=4, lr=0.05)
-   |  pytorch/            BrierNet (64->32->1, Brier loss)
+05_models/              3 models x LOGO-CV + isotonic calibration
+   |  xgboost/            XGBoost (max_depth=3, custom Brier objective) — men's
+   |  catboost/           CatBoost (depth=4, RMSE loss) — women's
+   |  pytorch/            BrierNet (64->32->1, Brier loss) — both
+   |  logistic_regression/ LogisticRegression (C=1.0, lbfgs) — both
         |
 06_model_eval/          Compare models + optimize ensemble weights
         |
@@ -149,7 +149,7 @@ Several features are highly correlated, which informs feature selection for mode
 
 For each matchup (TeamA vs TeamB), we compute **difference features**: `TeamA_stat - TeamB_stat`. This captures the relative strength between teams and is the dominant pattern in winning Kaggle solutions.
 
-*Table 4: Complete feature set for men's predictions (27 features).*
+*Table 4: Complete feature set for men's predictions (38 features).*
 
 | Category | Features | Count |
 |----------|----------|-------|
@@ -161,11 +161,20 @@ For each matchup (TeamA vs TeamB), we compute **difference features**: `TeamA_st
 | Box Score | AvgTODiff, AvgStlDiff, AvgBlkDiff, AvgORDiff, AvgDRDiff, AvgAstDiff | 6 |
 | Pace | AvgPossDiff | 1 |
 | Conference | IsPowerConfDiff | 1 |
+| Elo | EloDiff | 1 |
+| Strength of Schedule | SOSDiff (avg opponent WinPct) | 1 |
+| Consistency | ScoreStdDiff (std dev of point differential) | 1 |
+| Quality Wins | QualityWinPctDiff (win% vs opponents with WinPct >= 0.6) | 1 |
+| Conf Tournament | ConfTourneyChampDiff (won conference tournament: 1/0) | 1 |
+| Recent Form | RecentWinPctDiff, RecentAvgPointDiffDiff, RecentOffEffDiff, RecentDefEffDiff, RecentNetEffDiff, RecentFGPctDiff | 6 |
 
 **Key preprocessing decisions:**
 - **Flip and double**: Each training matchup appears twice — original and mirror (features negated, label flipped). This prevents the model from learning artifacts based on arbitrary team ID ordering and produces exactly balanced labels (50/50)
 - **Massey leakage prevention**: Rankings filtered to DayNum < 132 (before Selection Sunday) to prevent post-tournament data from leaking into features
-- **Missing data**: ~44% of training rows have NaN for detailed stats (pre-2003 games). Gradient boosting models handle this natively; the neural net imputes with 0 (meaning "no difference")
+- **Missing data**: ~44% of training rows have NaN for detailed stats (pre-2003 games). Gradient boosting models handle this natively; the neural net and logistic regression impute with 0 (meaning "no difference")
+- **Elo ratings**: Computed iteratively from all historical games with K=32, margin-of-victory adjustment, home-court advantage, and season-start mean reversion
+- **Strength of schedule**: Average opponent win percentage across the regular season
+- **Conference tournament champion**: Derived from `MConferenceTourneyGames.csv` — the last winner per conference-season
 
 ## Cross-Validation Strategy
 
@@ -189,7 +198,7 @@ We use **Leave-One-Season-Out (LOGO)** cross-validation — the standard approac
 
 ## Model Training & Results
 
-All four models share the same training framework: LOGO-CV on flip-doubled data, isotonic regression calibration on OOF predictions, and final predictions clipped to [0.02, 0.98].
+All models share the same training framework: LOGO-CV on flip-doubled data, isotonic regression calibration on OOF predictions, and final predictions clipped to [0.02, 0.98]. The men's ensemble uses XGBoost, PyTorch, and Logistic Regression.
 
 ### Individual Model Results
 
@@ -197,29 +206,28 @@ All four models share the same training framework: LOGO-CV on flip-doubled data,
 
 | Rank | Model | Loss Function | OOF Brier (raw) | OOF Brier (calibrated) | Stage 1 Brier |
 |------|-------|--------------|-----------------|----------------------|---------------|
-| 1 | PyTorch BrierNet | Brier (MSE) | 0.1827 | **0.1797** | 0.1865 |
-| 2 | LightGBM | Log Loss | 0.1834 | 0.1799 | 0.1893 |
-| 3 | CatBoost | Log Loss | 0.1837 | 0.1802 | 0.1909 |
-| 4 | XGBoost | Log Loss | 0.1832 | 0.1804 | 0.1866 |
+| 1 | PyTorch BrierNet | Brier (MSE) | 0.1810 | **0.1785** | 0.1850 |
+| 2 | XGBoost | Custom Brier | 0.1830 | 0.1790 | 0.1838 |
+| 3 | Logistic Regression | Log Loss | 0.1855 | 0.1823 | 0.1946 |
 
-The PyTorch model trained with Brier loss outperforms all three gradient boosting models, confirming the research finding that training directly on the competition metric produces better-calibrated probabilities.
+PyTorch trained with Brier loss outperforms XGBoost, confirming the research finding that training directly on the competition metric produces better-calibrated probabilities. Logistic regression provides structural diversity (correlation ~0.87 with tree/NN models vs 0.96+ inter-model) even though it receives 0% ensemble weight.
 
 ### XGBoost Feature Importance
 
-*Table 7: XGBoost feature importance by gain (Men's). SeedDiff dominates, contributing 5x more than any other feature.*
+*Table 7: XGBoost feature importance by gain (Men's). SeedDiff dominates, with the new SOS feature cracking the top 10.*
 
 | Feature | Gain |
 |---------|------|
-| SeedDiff | 78.15 |
-| SeedB | 14.98 |
-| SeedA | 14.65 |
-| AvgPointDiffDiff | 14.57 |
-| MORDiff | 11.37 |
-| WLKDiff | 11.34 |
-| IsPowerConfDiff | 10.29 |
-| TopSystemsAvgRankDiff | 9.42 |
-| AvgTODiff | 6.46 |
-| NetEffDiff | 6.14 |
+| SeedDiff | 99.75 |
+| AvgOrdinalRankDiff | 23.68 |
+| TopSystemsAvgRankDiff | 14.26 |
+| EloDiff | 13.47 |
+| MORDiff | 6.12 |
+| RecentWinPctDiff | 5.83 |
+| SeedB | 5.20 |
+| IsPowerConfDiff | 4.48 |
+| **SOSDiff** | **4.45** |
+| AvgPointDiffDiff | 4.07 |
 
 ### Ensemble Construction
 
@@ -229,20 +237,19 @@ Ensemble weights were optimized by minimizing Brier score on OOF predictions usi
 
 | Model | Optimized Weight |
 |-------|-----------------|
-| PyTorch | **0.4678** |
-| LightGBM | 0.2216 |
-| CatBoost | 0.1736 |
-| XGBoost | 0.1369 |
+| PyTorch | **0.5109** |
+| XGBoost | 0.4891 |
+| Logistic Regression | 0.0000 |
 
 | Evaluation | Brier Score |
 |-----------|-------------|
-| Best single model (PyTorch) | 0.1797 |
-| Equal-weight ensemble | 0.1783 |
-| **Optimized ensemble** | **0.1781** |
-| Improvement over best single | **+0.0016** |
-| Stage 1 ensemble (2022-2025) | 0.1853 |
+| Best single model (PyTorch) | 0.1785 |
+| Equal-weight ensemble | 0.1780 |
+| **Optimized ensemble** | **0.1772** |
+| Improvement over best single | **+0.0013** |
+| Stage 1 ensemble (2022-2025) | 0.1829 |
 
-PyTorch earned nearly half the ensemble weight, confirming that Brier-loss training produces predictions that complement the gradient boosting models. The ensemble provides a consistent improvement over any single model.
+The ensemble is a near-equal split between PyTorch (51%) and XGBoost (49%), reflecting their complementary strengths. LightGBM and CatBoost were removed from the men's ensemble as they were >0.997 correlated with XGBoost and contributed minimal diversity.
 
 ---
 
@@ -268,11 +275,12 @@ The women's dataset spans 28 seasons (1998-2026) with 1,717 tournament games. Th
 |--------|-------|---------|
 | Compact results start | 1985 | 1998 |
 | Detailed box scores start | 2003 | 2010 |
-| Massey Ordinals | 191 systems available | Not available |
+| Massey Ordinals | 191 systems available | Not available (synthetic rankings via Ridge regression) |
 | Coaches data | Available | Not available |
-| Number of features | 27 | 21 |
+| Number of features | 38 | 33 |
+| Ensemble models | XGBoost + PyTorch + LogReg | CatBoost + PyTorch + LogReg |
 | Tournament upset rate | ~27% | Lower (top seeds dominant) |
-| LOGO-CV folds | 40 | ~26 |
+| LOGO-CV folds | 40 | 27 |
 
 ## Exploratory Data Analysis
 
@@ -304,21 +312,30 @@ The women's tournament is significantly more predictable than the men's. Top see
 
 ## Feature Engineering
 
-The women's feature set is the same as men's minus the 6 Massey-related features, yielding 21 features total.
+The women's feature set replaces the 6 Massey-related features with a single synthetic ranking feature (built via Ridge regression on team stats), and shares all other features with the men's pipeline including the new SOS, consistency, quality wins, and conference tournament champion features.
 
-*Table 11: Women's feature set (21 features).*
+*Table 11: Women's feature set (33 features).*
 
 | Category | Features | Count |
 |----------|----------|-------|
 | Seeds | SeedDiff, SeedA, SeedB | 3 |
+| Synthetic Rankings | SyntheticRankDiff (Ridge regression on team stats, R²=0.416) | 1 |
 | Efficiency | OffEffDiff, DefEffDiff, NetEffDiff | 3 |
 | Record | WinPctDiff, AvgPointDiffDiff | 2 |
 | Shooting | FGPctDiff, FG3PctDiff, FTPctDiff, OppFGPctDiff, OppFG3PctDiff | 5 |
 | Box Score | AvgTODiff, AvgStlDiff, AvgBlkDiff, AvgORDiff, AvgDRDiff, AvgAstDiff | 6 |
 | Pace | AvgPossDiff | 1 |
 | Conference | IsPowerConfDiff | 1 |
+| Elo | EloDiff | 1 |
+| Strength of Schedule | SOSDiff (avg opponent WinPct) | 1 |
+| Consistency | ScoreStdDiff (std dev of point differential) | 1 |
+| Quality Wins | QualityWinPctDiff (win% vs opponents with WinPct >= 0.6) | 1 |
+| Conf Tournament | ConfTourneyChampDiff (won conference tournament: 1/0) | 1 |
+| Recent Form | RecentWinPctDiff, RecentAvgPointDiffDiff, RecentOffEffDiff, RecentDefEffDiff, RecentNetEffDiff, RecentFGPctDiff | 6 |
 
 ## Model Training & Results
+
+The women's ensemble uses CatBoost, PyTorch, and Logistic Regression. CatBoost was chosen over XGBoost for women's because it achieved better OOF calibrated Brier (0.1374 vs 0.1377) and handles NaN natively — important since ~44% of women's training data is missing detailed stats (pre-2010).
 
 ### Individual Model Results
 
@@ -326,33 +343,31 @@ The women's feature set is the same as men's minus the 6 Massey-related features
 
 | Rank | Model | Loss Function | OOF Brier (raw) | OOF Brier (calibrated) | Stage 1 Brier |
 |------|-------|--------------|-----------------|----------------------|---------------|
-| 1 | PyTorch BrierNet | Brier (MSE) | 0.1387 | **0.1347** | 0.1290 |
-| 2 | CatBoost | Log Loss | 0.1422 | 0.1384 | 0.1350 |
-| 3 | XGBoost | Log Loss | 0.1427 | 0.1395 | 0.1334 |
-| 4 | LightGBM | Log Loss | 0.1432 | 0.1401 | 0.1358 |
+| 1 | PyTorch BrierNet | Brier (MSE) | 0.1390 | **0.1358** | 0.1317 |
+| 2 | CatBoost | RMSE | 0.1411 | 0.1374 | 0.1348 |
+| 3 | Logistic Regression | Log Loss | 0.1434 | 0.1386 | 0.1377 |
 
-Women's Brier scores are significantly lower than men's (~0.135 vs ~0.180), reflecting the more predictable nature of the women's tournament.
+Women's Brier scores are significantly lower than men's (~0.135 vs ~0.178), reflecting the more predictable nature of the women's tournament. Logistic regression is more competitive in the women's ensemble than the men's, earning 16% weight — likely because the simpler feature set (no Massey) favors linear models.
 
 ### Ensemble Construction
 
-*Table 13: Women's ensemble weights. PyTorch dominates even more than in the men's ensemble, receiving 77% of the weight.*
+*Table 13: Women's ensemble weights and final Brier scores.*
 
 | Model | Optimized Weight |
 |-------|-----------------|
-| PyTorch | **0.7709** |
-| CatBoost | 0.1700 |
-| XGBoost | 0.0460 |
-| LightGBM | 0.0131 |
+| PyTorch | **0.5530** |
+| CatBoost | 0.2886 |
+| Logistic Regression | 0.1584 |
 
 | Evaluation | Brier Score |
 |-----------|-------------|
-| Best single model (PyTorch) | 0.1347 |
-| Equal-weight ensemble | 0.1363 |
-| **Optimized ensemble** | **0.1343** |
-| Improvement over best single | **+0.0004** |
-| Stage 1 ensemble (2022-2025) | 0.1286 |
+| Best single model (PyTorch) | 0.1358 |
+| Equal-weight ensemble | 0.1352 |
+| **Optimized ensemble** | **0.1349** |
+| Improvement over best single | **+0.0009** |
+| Stage 1 ensemble (2022-2025) | 0.1303 |
 
-PyTorch dominates the women's ensemble at 77% weight — nearly double its share in the men's ensemble. When the tournament is more predictable, the benefit of training directly on Brier loss is amplified.
+All three models contribute meaningfully to the women's ensemble. Model correlations are lower than men's (0.92–0.94 vs 0.96+), explaining why all three earn weight. LightGBM and XGBoost were removed from the women's ensemble as CatBoost outperformed both.
 
 ---
 
@@ -360,11 +375,11 @@ PyTorch dominates the women's ensemble at 77% weight — nearly double its share
 
 *Table 14: Final submission composition.*
 
-| Component | Stage 1 Rows | Stage 2 Rows | Pred Range |
-|-----------|-------------|-------------|------------|
-| Men's ensemble | 261,013 | 66,430 | [0.020, 0.980] |
-| Women's ensemble | 258,131 | 65,703 | [0.020, 0.980] |
-| **Combined** | **519,144** | **132,133** | **[0.020, 0.980]** |
+| Component | Stage 1 Rows | Stage 2 Rows | Pred Range | Pred Mean |
+|-----------|-------------|-------------|------------|-----------|
+| Men's ensemble (XGBoost + PyTorch + LogReg) | 261,013 | 66,430 | [0.020, 0.980] | 0.498 |
+| Women's ensemble (CatBoost + PyTorch + LogReg) | 258,131 | 65,703 | [0.020, 0.980] | 0.500 |
+| **Combined** | **519,144** | **132,133** | **[0.020, 0.980]** | |
 
 All validations passed: correct row counts, correct columns (ID, Pred), no null values, predictions within [0, 1], and IDs match the sample submission exactly.
 
@@ -374,21 +389,25 @@ All validations passed: correct row counts, correct columns (ID, Pred), no null 
 
 ## What Worked
 
-1. **Brier loss training**: The PyTorch model trained directly on Brier loss consistently outperformed all three gradient boosting models (trained on log loss), confirming academic research findings. This was the single most impactful modeling decision.
+1. **Brier loss training**: The PyTorch model trained directly on Brier loss consistently outperformed all gradient boosting models, confirming academic research findings. This was the single most impactful modeling decision.
 
-2. **Massey Ordinal rankings** (men's only): SeedDiff was the most important feature by far, but Massey rankings (especially MOR and WLK) provided strong complementary signal, appearing in the top 10 features by gain.
+2. **Massey Ordinal rankings** (men's only): SeedDiff was the most important feature by far, but Massey rankings (especially MOR and WLK) provided strong complementary signal. For women's, a synthetic ranking via Ridge regression partially compensated.
 
-3. **Isotonic regression calibration**: Improved every model's Brier score by 0.002-0.004. Gradient boosting models cluster predictions around 0.5 and need post-hoc calibration to spread them appropriately.
+3. **Strength of schedule and quality wins**: The new SOS feature (average opponent WinPct) cracked the XGBoost top 10 by gain for both men's and women's, confirming that schedule difficulty provides predictive signal beyond raw win percentage.
 
-4. **Flip-and-double augmentation**: Doubled the training data and eliminated ordering bias. Simple but essential — without it, the model could learn that the lower-ID team wins more often (an artifact of the ID assignment scheme).
+4. **Isotonic regression calibration**: Improved every model's Brier score by 0.002-0.005. Gradient boosting models cluster predictions around 0.5 and need post-hoc calibration to spread them appropriately.
 
-5. **Ensembling**: Even with highly correlated models, the optimized ensemble consistently beat the best single model — by 0.0016 on men's and 0.0004 on women's.
+5. **Flip-and-double augmentation**: Doubled the training data and eliminated ordering bias. Simple but essential — without it, the model could learn that the lower-ID team wins more often (an artifact of the ID assignment scheme).
+
+6. **Different ensembles for men's vs women's**: Men's uses XGBoost + PyTorch; women's uses CatBoost + PyTorch + Logistic Regression. CatBoost's native NaN handling benefits the women's data (more missing stats), and logistic regression earns 16% weight in women's (vs 0% in men's) because the simpler feature set favors linear models.
+
+7. **Ensemble pruning**: Removing highly correlated models (LightGBM and CatBoost from men's; LightGBM and XGBoost from women's) simplified the pipeline with no loss in ensemble Brier score.
 
 ## What's Different About Women's vs Men's
 
-- Women's tournament is ~25% more predictable (Brier 0.134 vs 0.178)
-- PyTorch dominates the women's ensemble (77% vs 47%) — Brier-loss training matters more when outcomes are more deterministic
-- Without Massey Ordinals, the women's pipeline relies entirely on derived efficiency stats and seeds — yet achieves excellent scores
+- Women's tournament is ~25% more predictable (Brier 0.135 vs 0.177)
+- All three models earn weight in women's ensemble (55/29/16%) vs effectively two in men's (51/49/0%)
+- Without Massey Ordinals, the women's pipeline uses a synthetic ranking feature (Ridge regression, R²=0.416) — competitive but weaker than real Massey systems
 
 ## Research-Driven Decisions
 
@@ -415,12 +434,12 @@ Every major design decision was informed by investigating past winning solutions
 |-----------|--------------|
 | Naive (predict 0.5 for everything) | ~0.250 |
 | Seed-only model | ~0.210-0.230 |
-| **Our men's ensemble (all historical games)** | **0.1781** |
-| **Our women's ensemble (all historical games)** | **0.1343** |
+| **Our men's ensemble (all historical games)** | **0.1772** |
+| **Our women's ensemble (all historical games)** | **0.1349** |
 | Mid-tier Kaggle solution | ~0.126 |
 | Top 10% Kaggle solution | ~0.115-0.125 |
 
-Note: Our OOF scores are computed across all historical tournament games including pre-2003/pre-2010 seasons where features are sparser. Performance on recent seasons with full features is better (e.g., men's Stage 1 2022-2025: 0.1853, women's Stage 1: 0.1286).
+Note: Our OOF scores are computed across all historical tournament games including pre-2003/pre-2010 seasons where features are sparser. Performance on recent seasons with full features is better (e.g., men's Stage 1 2022-2025: 0.1829, women's Stage 1: 0.1303).
 
 ---
 
@@ -436,15 +455,17 @@ Note: Our OOF scores are computed across all historical tournament games includi
 
 *Table 16: Hyperparameters for all models.*
 
-| Parameter | XGBoost | LightGBM | CatBoost | PyTorch |
-|-----------|---------|----------|----------|---------|
-| Max depth / layers | 3 | 3 (8 leaves) | 4 | 2 layers (64, 32) |
-| Learning rate | 0.05 | 0.05 | 0.05 | 0.001 (Adam) |
-| Regularization | alpha=1.0, lambda=1.0 | alpha=1.0, lambda=1.0 | l2_leaf_reg=3.0 | Dropout=0.3, weight_decay=1e-4 |
-| Subsample | 0.8 | 0.8 | - | - |
-| Max rounds/epochs | 500 | 500 | 500 | 200 |
-| Early stopping | 50 rounds | 50 rounds | 50 rounds | 20 epochs |
-| Loss function | Log loss | Log loss | Log loss | **Brier (MSE)** |
+| Parameter | XGBoost | CatBoost | PyTorch | Logistic Regression |
+|-----------|---------|----------|---------|---------------------|
+| Max depth / layers | 3 | 4 | 2 layers (64, 32) | - (linear) |
+| Learning rate | 0.05 | 0.05 | 0.001 (Adam) | - |
+| Regularization | alpha=1.0, lambda=1.0 | l2_leaf_reg=3.0 | Dropout=0.3, weight_decay=1e-4 | C=1.0 (L2) |
+| Subsample | 0.8 | - | - | - |
+| Max rounds/epochs | 500 | 500 | 200 | 1000 (max_iter) |
+| Early stopping | 50 rounds | 50 rounds | 20 epochs | - |
+| Loss function | Custom Brier | RMSE | **Brier (MSE)** | Log loss |
+| Feature scaling | No | No | StandardScaler (per fold) | StandardScaler (per fold) |
+| NaN handling | Native | Native | Impute with 0 | Impute with 0 |
 
 ## How to Reproduce
 
@@ -453,7 +474,7 @@ Note: Our OOF scores are computed across all historical tournament games includi
 3. Run men's notebooks first, then women's at each stage
 4. Model notebooks within a stage can run in any order
 
-**SageMaker notes**: XGBoost must be pinned to `>=2.0,<3.0` (3.x needs CMake 3.18+). TensorFlow was dropped due to GCC 7.3 incompatibility.
+**SageMaker notes**: XGBoost must be pinned to `>=2.0,<3.0` (3.x needs CMake 3.18+). TensorFlow was dropped due to installation incompatibility. LightGBM 4.6 requires `objective='binary'` in params (the `fobj` keyword was removed).
 
 ## Project Structure
 
@@ -470,10 +491,10 @@ march_machine_learning_mania_2026/
 ├── 03_data_split/                  Matchups + CV folds
 ├── 04_preprocessing/               Feature engineering
 ├── 05_models/
-│   ├── xgboost/                    XGBoost (mens + womens)
-│   ├── lightgbm/                   LightGBM (mens + womens)
-│   ├── catboost/                   CatBoost (mens + womens)
-│   └── pytorch/                    PyTorch BrierNet (mens + womens)
+│   ├── xgboost/                    XGBoost (mens ensemble)
+│   ├── catboost/                   CatBoost (womens ensemble)
+│   ├── pytorch/                    PyTorch BrierNet (both ensembles)
+│   └── logistic_regression/        Logistic Regression (both ensembles)
 ├── 06_model_eval/                  Model comparison + ensemble
 │   └── output/                     Evaluation plots
 ├── 07_submission/                  Final CSV generation
