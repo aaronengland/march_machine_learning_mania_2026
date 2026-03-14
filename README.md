@@ -253,31 +253,30 @@ All models follow the same framework:
 - **Rounds**: 500 max with early stopping at 50. Final model uses median best round from CV (138)
 - **Key detail**: Uses `iteration_range=(0, model.best_iteration + 1)` in CV predict calls to ensure best model is used regardless of XGBoost version
 
-**Men's results**:
-- OOF Brier: 0.1832 raw → 0.1804 calibrated
-- Stage 1 Brier: 0.1777 calibrated
-- Top features by gain: SeedDiff (78.2), SeedB (15.0), SeedA (14.6), AvgPointDiffDiff (14.6), MORDiff (11.4)
+**Men's results**: OOF Brier: 0.1832 raw → 0.1804 calibrated. Top features by gain: SeedDiff (78.2), SeedB (15.0), SeedA (14.6), AvgPointDiffDiff (14.6), MORDiff (11.4)
+
+**Women's results**: OOF Brier: 0.1427 raw → 0.1395 calibrated
 
 #### LightGBM (`05_models/lightgbm/`)
 
 - **Version**: 4.6.0
 - **Hyperparameters**: max_depth=3, num_leaves=8, learning_rate=0.05, subsample=0.8, colsample_bytree=0.8, min_child_samples=10, reg_alpha=1.0, reg_lambda=1.0
-- **Rounds**: 500 max, early stopping 50. Final model: 115 rounds
+- **Rounds**: 500 max, early stopping 50. Final model: 115 rounds (men's)
 
-**Men's results**:
-- OOF Brier: 0.1834 raw → 0.1799 calibrated
-- Stage 1 Brier: 0.1779 calibrated
+**Men's results**: OOF Brier: 0.1834 raw → 0.1799 calibrated
+
+**Women's results**: OOF Brier: 0.1432 raw → 0.1401 calibrated
 
 #### CatBoost (`05_models/catboost/`)
 
 - **Version**: 1.2.10
 - **Hyperparameters**: depth=4, learning_rate=0.05, l2_leaf_reg=3.0
-- **Rounds**: 500 max, early stopping 50. Final model: 156 rounds
+- **Rounds**: 500 max, early stopping 50. Final model: 156 rounds (men's)
 - **Note**: Handles NaN natively via ordered boosting
 
-**Men's results**:
-- OOF Brier: 0.1837 raw → 0.1802 calibrated
-- Stage 1 Brier: 0.1790 calibrated
+**Men's results**: OOF Brier: 0.1837 raw → 0.1802 calibrated
+
+**Women's results**: OOF Brier: 0.1422 raw → 0.1384 calibrated
 
 #### PyTorch (`05_models/pytorch/`)
 
@@ -287,9 +286,9 @@ All models follow the same framework:
 - **Training**: Adam optimizer (lr=0.001, weight_decay=1e-4), batch_size=128, max 200 epochs, patience=20
 - **Note**: TensorFlow was dropped due to incompatible GCC version (7.3) on SageMaker
 
-**Men's results**:
-- OOF Brier: 0.1827 raw → 0.1797 calibrated (best single model)
-- Stage 1 Brier: 0.1876 calibrated
+**Men's results**: OOF Brier: 0.1827 raw → 0.1797 calibrated (best single model)
+
+**Women's results**: OOF Brier: 0.1387 raw → 0.1347 calibrated (best single model)
 
 ---
 
@@ -334,7 +333,26 @@ PyTorch earned nearly half the ensemble weight, confirming that training with Br
 | `ensemble_weights.parquet` | Optimized model weights |
 | `model_comparison.parquet` | Side-by-side model metrics |
 
-**Women's notebook**: Same structure with 4 models.
+**Women's notebook** (`06_model_eval/womens_notebook.ipynb`): Same structure with 4 models.
+
+**Women's ensemble results**:
+
+| Metric | Score |
+|--------|-------|
+| Best single model (PyTorch, calibrated) | 0.1347 |
+| Equal-weight ensemble | 0.1363 |
+| Optimized ensemble | **0.1343** |
+| Ensemble improvement over best single | +0.0004 |
+
+**Optimized weights** (women's):
+| Model | Weight |
+|-------|--------|
+| PyTorch | 0.7709 |
+| CatBoost | 0.1700 |
+| XGBoost | 0.0460 |
+| LightGBM | 0.0131 |
+
+PyTorch dominates even more in the women's ensemble (77%), reflecting the stronger benefit of Brier-loss training when the tournament is more predictable (fewer upsets).
 
 ---
 
@@ -346,7 +364,7 @@ PyTorch earned nearly half the ensemble weight, confirming that training with Br
 
 1. **Load sample submissions** to get required row IDs
 2. **Load men's ensemble predictions** from 06_model_eval
-3. **Load women's ensemble predictions** — if the women's pipeline has been completed, uses ensemble predictions. Otherwise, falls back to a **seed-based logistic model**: `P(A wins) = 1 / (1 + exp(0.15 * (SeedA - SeedB)))`. Teams without seeds get 0.5
+3. **Load women's ensemble predictions** from 06_model_eval
 4. **Combine** men's and women's predictions by concatenating
 5. **Merge with sample submission** to ensure every required row has a prediction. Missing predictions filled with 0.5
 6. **Validate**: Row count, column names, no nulls, prediction range [0,1], ID matching
@@ -382,11 +400,31 @@ The pipelines are structurally identical but run on separate data. The women's p
 
 | Rank | Model | OOF Brier | Stage 1 Brier |
 |------|-------|-----------|---------------|
-| 1 | PyTorch (Brier loss) | 0.1797 | 0.1876 |
-| 2 | LightGBM | 0.1799 | 0.1779 |
-| 3 | CatBoost | 0.1802 | 0.1790 |
-| 4 | XGBoost | 0.1804 | 0.1777 |
+| 1 | PyTorch (Brier loss) | 0.1797 | 0.1865 |
+| 2 | LightGBM | 0.1799 | 0.1893 |
+| 3 | CatBoost | 0.1802 | 0.1909 |
+| 4 | XGBoost | 0.1804 | 0.1866 |
 | **E** | **Ensemble (optimized)** | **0.1781** | **0.1853** |
+
+### Women's Model Comparison (OOF Brier Score, Calibrated)
+
+| Rank | Model | OOF Brier | Stage 1 Brier |
+|------|-------|-----------|---------------|
+| 1 | PyTorch (Brier loss) | 0.1347 | 0.1290 |
+| 2 | CatBoost | 0.1384 | 0.1350 |
+| 3 | XGBoost | 0.1395 | 0.1334 |
+| 4 | LightGBM | 0.1401 | 0.1358 |
+| **E** | **Ensemble (optimized)** | **0.1343** | **0.1286** |
+
+Women's Brier scores are significantly lower than men's (~0.134 vs ~0.178), reflecting the women's tournament being more predictable (fewer upsets, top seeds more dominant).
+
+### Final Submission
+
+| Component | Stage 1 Rows | Stage 2 Rows | Pred Range |
+|-----------|-------------|-------------|------------|
+| Men's ensemble | 261,013 | 66,430 | [0.020, 0.980] |
+| Women's ensemble | 258,131 | 65,703 | [0.020, 0.980] |
+| **Combined** | **519,144** | **132,133** | **[0.020, 0.980]** |
 
 ### Brier Score Benchmarks (from research)
 
@@ -397,7 +435,7 @@ The pipelines are structurally identical but run on separate data. The women's p
 | Mid-tier solution | ~0.126 |
 | Top 10% | ~0.115–0.125 |
 
-Note: Our scores are computed on all historical tournament games (1985–2025) including pre-2003 seasons with sparser features. Scores on recent seasons with full features are better.
+Note: Our OOF scores are computed on all historical tournament games including pre-2003/pre-2010 seasons with sparser features. Scores on recent seasons with full features are better.
 
 ---
 
@@ -446,7 +484,7 @@ Each model can be run independently. Order within gender doesn't matter.
 
 **Stage 6 — Model Eval**: Run `06_model_eval/mens_notebook.ipynb`, then `womens_notebook.ipynb`. Compares models and builds the ensemble.
 
-**Stage 7 — Submission**: Run `07_submission/generate_submission.ipynb`. Combines men's and women's predictions into the final CSV. If women's pipeline hasn't been run, uses seed-based fallback.
+**Stage 7 — Submission**: Run `07_submission/generate_submission.ipynb`. Combines men's and women's ensemble predictions into the final CSV.
 
 ### Notes
 - Each notebook reads from the previous stage's S3 outputs. Local fallback paths are provided for development
