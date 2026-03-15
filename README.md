@@ -180,7 +180,7 @@ For each matchup (TeamA vs TeamB), we compute **difference features**: `TeamA_st
 **Key preprocessing decisions:**
 - **Flip and double**: Each training matchup appears twice — original and mirror (features negated, label flipped). This prevents the model from learning artifacts based on arbitrary team ID ordering and produces exactly balanced labels (50/50)
 - **Massey leakage prevention**: Rankings filtered to DayNum < 132 (before Selection Sunday) to prevent post-tournament data from leaking into features
-- **Missing data**: ~44% of training rows have NaN for detailed stats (pre-2003 games). Gradient boosting models handle this natively; the neural net and logistic regression impute with 0 (meaning "no difference")
+- **Missing data**: ~44% of training rows have NaN for detailed stats (pre-2003 games). Gradient boosting models handle this natively; the neural net and logistic regression impute with 0 (representing no difference between teams)
 - **Elo ratings**: Computed iteratively from all historical games with K=32, margin-of-victory adjustment, home-court advantage, and season-start mean reversion
 
 ## Cross-Validation Strategy
@@ -277,7 +277,7 @@ Ensemble weights were optimized by minimizing Brier score on OOF predictions usi
 | Best single model (PyTorch) | 0.1731 |
 | Equal-weight ensemble | 0.1746 |
 | **Optimized ensemble** | **0.1723** |
-| Improvement over best single | **+0.0008** |
+| Improvement over best single | **-0.0008** |
 | **Stage 1 ensemble (2022-2025)** | **0.1759** |
 
 *Table 10: Men's ensemble weights and final Brier scores.*
@@ -408,7 +408,7 @@ Women's Brier scores are significantly lower than men's (~0.134 vs ~0.173), refl
 | Best single model (PyTorch) | 0.1340 |
 | Equal-weight ensemble | 0.1325 |
 | **Optimized ensemble** | **0.1314** |
-| Improvement over best single | **+0.0026** |
+| Improvement over best single | **-0.0026** |
 | **Stage 1 ensemble (2022-2025)** | **0.1211** |
 
 *Table 16: Women's ensemble weights and final Brier scores.*
@@ -522,8 +522,8 @@ march_machine_learning_mania_2026/
 ├── 03_data_split/                  Matchups + CV folds
 ├── 04_preprocessing/               Feature engineering
 ├── 05_models/
-│   ├── xgboost/                    XGBoost (mens ensemble)
-│   ├── catboost/                   CatBoost (womens ensemble)
+│   ├── xgboost/                    XGBoost (men's only)
+│   ├── catboost/                   CatBoost (women's only)
 │   ├── pytorch/                    PyTorch BrierNet (both ensembles)
 │   └── logistic_regression/        Logistic Regression (both ensembles)
 ├── 06_model_eval/                  Model comparison + ensemble

@@ -91,7 +91,7 @@ These are the features that consistently appear in top solutions:
 
 ### Tier 1 — Highest Predictive Value
 
-1. **Massey Ordinal rankings** (men's only): Pre-tournament ratings from systems like Pomeroy (POM), Sagarin (SAG), Moore (MOR), Whitlock (WLK). Top solutions select the 5–10 historically best systems and average or stack them. Use the **latest Massey ranking before the tournament** (DayNum < 133).
+1. **Massey Ordinal rankings** (men's only): Pre-tournament ratings from systems like Pomeroy (POM), Sagarin (SAG), Moore (MOR), Whitlock (WLK). Top solutions select the 5–10 historically best systems and average or stack them. Use the **latest Massey ranking before the tournament** (DayNum < 132).
 
 2. **Seed number / seed difference**: The most universally used feature. Directly encodes selection committee expectations. Even naive seed-only models are competitive.
 
