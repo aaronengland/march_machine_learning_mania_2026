@@ -95,21 +95,15 @@ march_machine_learning_mania_2026/
 ├── 05_models/
 │   ├── xgboost/
 │   │   ├── mens_notebook.ipynb
-│   │   ├── womens_notebook.ipynb
-│   │   └── output/
-│   ├── lightgbm/
-│   │   ├── mens_notebook.ipynb
-│   │   ├── womens_notebook.ipynb
 │   │   └── output/
 │   ├── catboost/
-│   │   ├── mens_notebook.ipynb
 │   │   ├── womens_notebook.ipynb
 │   │   └── output/
 │   ├── pytorch/
 │   │   ├── mens_notebook.ipynb
 │   │   ├── womens_notebook.ipynb
 │   │   └── output/
-│   └── tensorflow/
+│   └── logistic_regression/
 │       ├── mens_notebook.ipynb
 │       ├── womens_notebook.ipynb
 │       └── output/
@@ -127,10 +121,10 @@ march_machine_learning_mania_2026/
 
 - **Format**: Jupyter notebooks (`.ipynb`) for all pipeline stages
 - **Language**: Python 3
-- **Libraries**: XGBoost, LightGBM, CatBoost, PyTorch, TensorFlow, plus pandas, numpy, sklearn, matplotlib, seaborn, boto3, s3fs as needed
+- **Libraries**: XGBoost, CatBoost, PyTorch, scikit-learn (LogisticRegression), plus pandas, numpy, sklearn, matplotlib, seaborn, boto3, s3fs, optuna as needed
 - **Style**: Clean and well-commented. Explain the reasoning behind modeling decisions, not just what the code does. Use markdown cells in notebooks to narrate the analysis.
 - **Data flow**: Each stage reads from the previous stage's S3 outputs. Raw data in `00_data_collection/` (S3) is never modified.
-- **Naming**: Numbered folder prefixes to show pipeline order (00_, 01_, 02_, etc.). Every stage folder contains `mens_notebook.ipynb` and `womens_notebook.ipynb` — the folder name describes the step, the notebook name only distinguishes gender. Exception: `05_models/` has subfolders per model (xgboost, lightgbm, catboost, pytorch, tensorflow), each with `mens_notebook.ipynb` and `womens_notebook.ipynb`.
+- **Naming**: Numbered folder prefixes to show pipeline order (00_, 01_, 02_, etc.). Every stage folder contains `mens_notebook.ipynb` and `womens_notebook.ipynb` — the folder name describes the step, the notebook name only distinguishes gender. Exception: `05_models/` has subfolders per model type (xgboost, catboost, pytorch, logistic_regression). Not every model has both genders — XGBoost is men's only, CatBoost is women's only, while PyTorch and Logistic Regression have both.
 - **Notebook boilerplate**: Every notebook should start with a cell defining:
   ```python
   BUCKET = "march-machine-learning-mania-2026"
@@ -148,10 +142,14 @@ Before building models, run the `researcher` agent (defined in `.claude/agents/r
 
 ## Modeling Strategy Notes
 
-- Build separate models for men's and women's using XGBoost, LightGBM, CatBoost, PyTorch, and TensorFlow
+- Build separate 3-model ensembles for men's and women's:
+  - **Men's**: XGBoost + PyTorch + Logistic Regression
+  - **Women's**: CatBoost + PyTorch + Logistic Regression
+  - XGBoost is used for men's and CatBoost for women's as each performs better on its respective dataset. PyTorch and Logistic Regression are shared across both genders.
 - Predictions must be well-calibrated probabilities (not just rankings) since Brier score penalizes overconfident wrong predictions heavily
+- All models use Optuna for hyperparameter tuning on Stage 1 folds (2022–2025)
 - Validation should use Stage 1 data (2022–2025 tournament results) to simulate leaderboard scoring
 - `06_model_eval/` has two responsibilities:
   1. **Individual model evaluation** — compare each model's Brier score, calibration curves, and prediction distributions
-  2. **Ensemble construction** — build an ensemble combining all 5 models (e.g., weighted averaging, stacking, or blending). The ensemble predictions are what get passed to `07_submission/`.
+  2. **Ensemble construction** — build an ensemble combining all 3 models per gender (weighted averaging with SLSQP-optimized weights). The ensemble predictions are what get passed to `07_submission/`.
 - The final submission in `07_submission/` merges men's and women's ensemble predictions into one CSV
