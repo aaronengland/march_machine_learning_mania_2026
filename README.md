@@ -445,18 +445,18 @@ The neural network dominates even more in the women's blend (67%) compared to me
 
 # How Good Are These Predictions?
 
-To put the scores in context: a coin flip scores 0.250, and just picking the better seed gets you to about 0.210-0.230. Our models significantly outperform both baselines.
+To put the scores in context: a coin flip scores 0.250, and just picking the better seed gets you to about 0.210-0.230. My models significantly outperform both baselines.
 
 | Approach | Brier Score |
 |----------|-------------|
 | Coin flip (predict 50/50 for everything) | ~0.250 |
 | Just pick the better seed | ~0.210-0.230 |
-| **Our men's blend (all historical)** | **0.1747** |
-| **Our men's blend (Kaggle validation)** | **0.1800** |
-| **Our women's blend (all historical)** | **0.1299** |
-| **Our women's blend (Kaggle validation)** | **0.1244** |
+| **My men's blend (all historical)** | **0.1747** |
+| **My men's blend (Kaggle validation)** | **0.1800** |
+| **My women's blend (all historical)** | **0.1299** |
+| **My women's blend (Kaggle validation)** | **0.1244** |
 
-Lower is better. Our models are substantially more accurate than simple seed-based predictions.
+Lower is better. My models are substantially more accurate than simple seed-based predictions.
 
 ---
 
