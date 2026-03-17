@@ -61,8 +61,8 @@ This project builds a full ML pipeline to predict the probability of every possi
 │  │                                                                       │  │
 │  │              Men's Ensemble              Women's Ensemble             │  │
 │  │          ┌──────────────────┐        ┌──────────────────┐            │  │
-│  │          │ XGBoost    42.5% │        │ CatBoost   29.7% │            │  │
-│  │          │ PyTorch    57.5% │        │ PyTorch    70.3% │            │  │
+│  │          │ XGBoost    44.9% │        │ CatBoost   33.2% │            │  │
+│  │          │ PyTorch    55.1% │        │ PyTorch    66.8% │            │  │
 │  │          │ LogReg      0.0% │        │ LogReg      0.0% │            │  │
 │  │          └────────┬─────────┘        └────────┬─────────┘            │  │
 │  │                   ▼                           ▼                      │  │
@@ -90,7 +90,7 @@ This project builds a full ML pipeline to predict the probability of every possi
 | **Models** | XGBoost, PyTorch, Logistic Regression | CatBoost, PyTorch, Logistic Regression |
 | **Best single model** | PyTorch (Brier: 0.1760) | PyTorch (Brier: 0.1313) |
 | **Final ensemble** | **Brier: 0.1747** | **Brier: 0.1299** |
-| **Stage 1 ensemble** | **Brier: 0.1801** | **Brier: 0.1248** |
+| **Stage 1 ensemble** | **Brier: 0.1800** | **Brier: 0.1244** |
 | **Predictions generated** | 66,430 matchups | 65,703 matchups |
 
 ---
@@ -141,7 +141,8 @@ Understanding the model training process is critical, because there are three di
 
 ### Ensemble (from `06_model_eval`)
 
-- Ensemble weights are optimized by minimizing Brier score on Phase 2 OOF predictions using constrained optimization (scipy SLSQP, non-negative weights summing to 1)
+- Ensemble weights are optimized by minimizing **recency-weighted Brier score** on Phase 2 OOF predictions using constrained optimization (scipy SLSQP, non-negative weights summing to 1)
+- **Recency weighting**: each game's squared error is weighted linearly by season — the most recent season (2025) gets 40x the weight of the oldest (1985) for men's, and 27x for women's. This tells the optimizer "care more about getting recent tournaments right" since modern basketball is most relevant to 2026
 - The same weights are applied to Phase 3 final model predictions to produce the submission
 
 ```
@@ -373,12 +374,12 @@ We use **Leave-One-Season-Out (LOGO)** cross-validation — the standard approac
 
 ### Ensemble Construction
 
-Ensemble weights were optimized by minimizing Brier score on OOF predictions using constrained optimization (scipy SLSQP, non-negative weights summing to 1).
+Ensemble weights were optimized by minimizing **recency-weighted Brier score** on OOF predictions using constrained optimization (scipy SLSQP, non-negative weights summing to 1). Each game's error is weighted linearly by season — 2025 games count 40x more than 1985 games — so the ensemble favors accuracy on modern basketball.
 
 | Model | Optimized Weight |
 |-------|-----------------|
-| PyTorch | **0.5748** |
-| XGBoost | 0.4252 |
+| PyTorch | **0.5508** |
+| XGBoost | 0.4492 |
 | Logistic Regression | 0.0000 |
 
 | Evaluation | Brier Score |
@@ -387,11 +388,11 @@ Ensemble weights were optimized by minimizing Brier score on OOF predictions usi
 | Equal-weight ensemble | 0.1762 |
 | **Optimized ensemble** | **0.1747** |
 | Improvement over best single | **-0.0013** |
-| **Stage 1 ensemble (2022-2025)** | **0.1801** |
+| **Stage 1 ensemble (2022-2025)** | **0.1800** |
 
 *Table 9: Men's ensemble weights and final Brier scores.*
 
-The ensemble splits weight between PyTorch (57.5%) and XGBoost (42.5%). Logistic regression receives 0% weight — its predictions are too correlated with the other models to provide ensemble diversity.
+The ensemble splits weight between PyTorch (55.1%) and XGBoost (44.9%). Compared to unweighted optimization (57.5/42.5), recency weighting shifted weight toward XGBoost — indicating it has been relatively stronger on recent seasons. Logistic regression receives 0% weight — its predictions are too correlated with the other models to provide ensemble diversity.
 
 ---
 
@@ -505,10 +506,12 @@ Women's Brier scores are significantly lower than men's (~0.13 vs ~0.18), reflec
 
 ### Ensemble Construction
 
+Ensemble weights were optimized using recency-weighted Brier score — 2025 games count 27x more than 1998 games.
+
 | Model | Optimized Weight |
 |-------|-----------------|
-| PyTorch | **0.7029** |
-| CatBoost | 0.2971 |
+| PyTorch | **0.6676** |
+| CatBoost | 0.3324 |
 | Logistic Regression | 0.0000 |
 
 | Evaluation | Brier Score |
@@ -517,7 +520,7 @@ Women's Brier scores are significantly lower than men's (~0.13 vs ~0.18), reflec
 | Equal-weight ensemble | 0.1315 |
 | **Optimized ensemble** | **0.1299** |
 | Improvement over best single | **-0.0014** |
-| **Stage 1 ensemble (2022-2025)** | **0.1248** |
+| **Stage 1 ensemble (2022-2025)** | **0.1244** |
 
 *Table 15: Women's ensemble weights and final Brier scores.*
 
@@ -559,7 +562,7 @@ All validations passed: correct row counts, correct columns (ID, Pred), no null 
 ## What's Different About Women's vs Men's
 
 - Women's tournament is ~26% more predictable (Brier 0.130 vs 0.175)
-- Both ensembles give PyTorch majority weight, but men's is a more balanced split (57.5/42.5) vs women's (70/30)
+- Both ensembles give PyTorch majority weight, but men's is a more balanced split (55.1/44.9) vs women's (66.8/33.2)
 - Without Massey Ordinals, the women's pipeline uses a synthetic ranking feature (Ridge regression, R²=0.423) — competitive but weaker than real Massey systems
 - Women's PyTorch prefers a larger network (256->128) vs men's (64->32), possibly compensating for the lack of Massey features by learning more complex interactions
 
@@ -577,6 +580,7 @@ Every major design decision was informed by investigating past winning solutions
 | Isotonic calibration | Rank-107 2025 solution reported in-fold calibration as beneficial |
 | Clip to [0.02, 0.98] | Universal practice in top solutions to avoid overconfidence penalties |
 | Bayesian HP tuning | More efficient than grid search for continuous hyperparameter spaces |
+| Recency-weighted ensemble optimization | Modern seasons are most relevant to 2026 — weighting recent games more heavily improved Stage 1 scores |
 | Exclude 2020 | Tournament canceled — no data to validate on |
 
 ---
@@ -588,9 +592,9 @@ Every major design decision was informed by investigating past winning solutions
 | Naive (predict 0.5 for everything) | ~0.250 |
 | Seed-only model | ~0.210-0.230 |
 | **Our men's ensemble (all historical games)** | **0.1747** |
-| **Our men's ensemble (Stage 1 2022-2025)** | **0.1801** |
+| **Our men's ensemble (Stage 1 2022-2025)** | **0.1800** |
 | **Our women's ensemble (all historical games)** | **0.1299** |
-| **Our women's ensemble (Stage 1 2022-2025)** | **0.1248** |
+| **Our women's ensemble (Stage 1 2022-2025)** | **0.1244** |
 | Mid-tier Kaggle solution | ~0.126 |
 | Top 10% Kaggle solution | ~0.115-0.125 |
 
