@@ -130,7 +130,7 @@ The men's dataset spans 41 seasons (1985-2026) with nearly 200,000 regular seaso
 
 ### How Predictive Are Seeds?
 
-A team's seed (their ranking in the bracket, 1 being the best) is by far the most useful piece of information for predicting tournament outcomes. 1-seeds win 79% of their tournament games, while 16-seeds win only 12%. But seeds alone aren't the whole story — that's where the other 73 features come in.
+A team's seed (their ranking in the bracket, 1 being the best) is by far the most useful piece of information for predicting tournament outcomes. 1-seeds win 79% of their tournament games, and 16-seeds have only beaten a 1-seed twice in men's history. But seeds alone aren't the whole story — that's where the other 73 features come in.
 
 ![Seed Win Rate](02_eda/output/seed_win_rate.png)
 *Figure 1: Tournament win rate by seed number (Men's, 1985-2025). Higher seeds win significantly more often, though 8 vs 9 matchups are essentially coin flips (48.1%).*
