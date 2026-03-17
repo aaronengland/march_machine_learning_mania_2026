@@ -17,12 +17,12 @@ This project builds a full ML pipeline to predict the probability of every possi
 │                                                                             │
 │  ┌───────────── DATA ──────────────┐  ┌────────── FEATURES ──────────────┐  │
 │  │ Men's:  41 seasons (1985-2026)  │  │ Men's:  74 difference features   │  │
-│  │         198K regular season games│  │   Seeds, Massey ranks, Elo,     │  │
+│  │         199K regular season games│  │   Seeds, Massey ranks, Elo,     │  │
 │  │         2,585 tournament games  │  │   shooting, momentum, SOS...    │  │
-│  │         191 Massey ranking systems│ │                                 │  │
-│  │                                 │  │ Women's: 58 difference features  │  │
+│  │         192 Massey ranking systems│ │                                 │  │
+│  │                                 │  │ Women's: 63 difference features  │  │
 │  │ Women's: 28 seasons (1998-2026) │  │   Seeds, synthetic ranks, Elo,  │  │
-│  │          142K regular season games│ │   shooting, momentum, SOS...    │  │
+│  │          143K regular season games│ │   shooting, momentum, SOS...    │  │
 │  │          1,717 tournament games │  │   (no Massey Ordinals available) │  │
 │  └─────────────────────────────────┘  └──────────────────────────────────┘  │
 │                                                                             │
@@ -61,18 +61,18 @@ This project builds a full ML pipeline to predict the probability of every possi
 │  │                                                                       │  │
 │  │              Men's Ensemble              Women's Ensemble             │  │
 │  │          ┌──────────────────┐        ┌──────────────────┐            │  │
-│  │          │ XGBoost    30.6% │        │ CatBoost   29.6% │            │  │
-│  │          │ PyTorch    69.4% │        │ PyTorch    67.7% │            │  │
-│  │          │ LogReg      0.0% │        │ LogReg      2.8% │            │  │
+│  │          │ XGBoost    42.5% │        │ CatBoost   29.7% │            │  │
+│  │          │ PyTorch    57.5% │        │ PyTorch    70.3% │            │  │
+│  │          │ LogReg      0.0% │        │ LogReg      0.0% │            │  │
 │  │          └────────┬─────────┘        └────────┬─────────┘            │  │
 │  │                   ▼                           ▼                      │  │
-│  │          Brier: 0.1733               Brier: 0.1325                  │  │
+│  │          Brier: 0.1747               Brier: 0.1299                  │  │
 │  │                                                                       │  │
 │  │    ──────────────────────────────────────────────── Benchmarks ──     │  │
 │  │    Naive (all 0.5)           ████████████████████████████  0.250     │  │
 │  │    Seed-only model           █████████████████████         0.220     │  │
-│  │    Our men's ensemble        █████████████████             0.173     │  │
-│  │    Our women's ensemble      █████████████                 0.133     │  │
+│  │    Our men's ensemble        █████████████████             0.175     │  │
+│  │    Our women's ensemble      █████████████                 0.130     │  │
 │  │    Top Kaggle solutions      ████████████                  0.120     │  │
 │  │                                                                       │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
@@ -86,11 +86,11 @@ This project builds a full ML pipeline to predict the probability of every possi
 | | Men's | Women's |
 |---|---|---|
 | **Training games** | 2,585 tournament matchups (1985-2025) | 1,717 tournament matchups (1998-2025) |
-| **Features** | 74 difference features | 58 difference features |
+| **Features** | 74 difference features | 63 difference features |
 | **Models** | XGBoost, PyTorch, Logistic Regression | CatBoost, PyTorch, Logistic Regression |
-| **Best single model** | PyTorch (Brier: 0.1746) | PyTorch (Brier: 0.1337) |
-| **Final ensemble** | **Brier: 0.1733** | **Brier: 0.1325** |
-| **Stage 1 ensemble** | **Brier: 0.1772** | **Brier: 0.1207** |
+| **Best single model** | PyTorch (Brier: 0.1760) | PyTorch (Brier: 0.1313) |
+| **Final ensemble** | **Brier: 0.1747** | **Brier: 0.1299** |
+| **Stage 1 ensemble** | **Brier: 0.1801** | **Brier: 0.1248** |
 | **Predictions generated** | 66,430 matchups | 65,703 matchups |
 
 ---
@@ -111,10 +111,10 @@ Understanding the model training process is critical, because there are three di
 
 | Model | Trials | Tuning Folds | Best Trial Brier |
 |-------|--------|-------------|-----------------|
-| XGBoost (men's) | 50 | 2022-2025 | 0.1801 |
-| PyTorch (men's) | 30 | 2022-2025 | 0.1869 |
-| Logistic Regression (men's) | 50 | 2022-2025 | 0.1919 |
-| CatBoost (women's) | 50 | 2022-2025 | tuned |
+| XGBoost (men's) | 50 | 2022-2025 | 0.1836 |
+| PyTorch (men's) | 30 | 2022-2025 | 0.1861 |
+| Logistic Regression (men's) | 50 | 2022-2025 | 0.1918 |
+| CatBoost (women's) | 50 | 2022-2025 | 0.0874 |
 | PyTorch (women's) | 30 | 2022-2025 | tuned |
 | Logistic Regression (women's) | 50 | 2022-2025 | tuned |
 
@@ -186,16 +186,16 @@ The pipeline runs in 8 stages, with separate men's and women's notebooks at each
 
 ## Data
 
-The men's dataset spans 41 seasons (1985-2026) with 198,079 regular season games and 2,585 tournament games. Detailed box scores (FGM, FGA, 3PT, FT, rebounds, assists, turnovers, steals, blocks) are available from 2003 onward. Additionally, **Massey Ordinals** provide pre-tournament rankings from ~191 rating systems (including KenPom, Sagarin, and others) — a uniquely powerful feature for men's predictions.
+The men's dataset spans 41 seasons (1985-2026) with 198,577 regular season games and 2,585 tournament games. Detailed box scores (FGM, FGA, 3PT, FT, rebounds, assists, turnovers, steals, blocks) are available from 2003 onward. Additionally, **Massey Ordinals** provide pre-tournament rankings from ~192 rating systems (including KenPom, Sagarin, and others) — a uniquely powerful feature for men's predictions.
 
 | Dataset | Rows | Seasons | Description |
 |---------|------|---------|-------------|
-| Regular season (compact) | 198,079 | 1985-2026 | Game scores and locations |
-| Regular season (detailed) | 124,031 | 2003-2026 | Full box score statistics |
+| Regular season (compact) | 198,577 | 1985-2026 | Game scores and locations |
+| Regular season (detailed) | 124,529 | 2003-2026 | Full box score statistics |
 | Tournament (compact) | 2,585 | 1985-2025 | Tournament game scores |
 | Tournament (detailed) | 1,449 | 2003-2025 | Tournament box scores |
-| Massey Ordinals | 5,819,228 | 2003-2026 | Weekly rankings from ~191 systems |
-| Tournament seeds | 2,626 | 1985-2025 | Seed assignments per team |
+| Massey Ordinals | 5,865,001 | 2003-2026 | Weekly rankings from ~192 systems |
+| Tournament seeds | 2,694 | 1985-2026 | Seed assignments per team |
 
 *Table 1: Men's data sources and their coverage.*
 
@@ -235,7 +235,7 @@ The overall upset rate across the men's tournament is 27.3%. There is no strong 
 
 ### Which Massey Systems Are Most Predictive?
 
-The Massey Ordinals dataset contains rankings from ~191 different rating systems. We tested each system's predictive accuracy on tournament outcomes: what fraction of games did the better-ranked team win?
+The Massey Ordinals dataset contains rankings from ~192 different rating systems. We tested each system's predictive accuracy on tournament outcomes: what fraction of games did the better-ranked team win?
 
 ![Massey System Accuracy](02_eda/output/massey_system_accuracy.png)
 *Figure 4: Top 30 Massey Ordinal systems ranked by tournament prediction accuracy (Men's, 2003-2025). Gold bars highlight the research-recommended systems (POM, SAG, MOR, WLK) and composite averages. The top individual systems reach ~78% accuracy, while composites are competitive at ~73%.*
@@ -246,13 +246,13 @@ Tournament teams differ dramatically from non-tournament teams across key metric
 
 | Statistic | Non-Tournament | Tournament | Difference |
 |-----------|---------------|------------|------------|
-| Win Pct | 0.445 | 0.726 | +63.2% |
-| Avg Point Diff | -1.93 | +7.82 | +9.74 pts |
-| Offensive Efficiency | 1.007 | 1.085 | +7.8% |
-| Defensive Efficiency | 1.035 | 0.970 | -6.2% |
-| FG% | 0.432 | 0.459 | +6.1% |
-| Assists/Game | 12.77 | 14.44 | +13.1% |
-| Blocks/Game | 3.28 | 3.85 | +17.2% |
+| Win Pct | 0.442 | 0.726 | +64.3% |
+| Avg Point Diff | -2.04 | +7.86 | +9.89 pts |
+| Offensive Efficiency | 1.005 | 1.087 | +8.3% |
+| Defensive Efficiency | 1.034 | 0.973 | -5.9% |
+| FG% | 0.432 | 0.459 | +6.3% |
+| Assists/Game | 12.74 | 14.48 | +13.7% |
+| Blocks/Game | 3.18 | 3.84 | +20.7% |
 
 *Table 3: Average statistics for tournament vs non-tournament teams (Men's, 2003+).*
 
@@ -338,23 +338,23 @@ We use **Leave-One-Season-Out (LOGO)** cross-validation — the standard approac
 
 | Parameter | XGBoost | PyTorch | Logistic Regression |
 |-----------|---------|---------|---------------------|
-| Architecture | max_depth=5 | BrierNet(64 -> 32 -> 1) | Linear |
-| Learning rate | 0.198 | 0.00997 (Adam) | - |
-| Regularization | alpha=1.469, lambda=3.819 | dropout=0.126, weight_decay=0.000467 | C=0.00860 (elasticnet, l1_ratio=0.854) |
-| Subsample | 0.743, colsample=0.967 | - | - |
-| Other | min_child_weight=17 | batch_size=256 | solver=saga |
+| Architecture | max_depth=2 | BrierNet(64 -> 32 -> 1) | Linear |
+| Learning rate | 0.136 | 0.00989 (Adam) | - |
+| Regularization | alpha=0.017, lambda=0.071 | dropout=0.120, weight_decay=0.00392 | C=0.00839 (elasticnet, l1_ratio=0.909) |
+| Subsample | 0.500, colsample=0.772 | - | - |
+| Other | min_child_weight=4 | batch_size=256 | solver=saga |
 | Loss function | Custom Brier | Brier (MSE) | Log loss |
-| Final rounds/epochs | 22 | early stopping | - |
+| Final rounds/epochs | 72 | early stopping | - |
 
 *Table 6: Tuned hyperparameters for men's models.*
 
 ### Individual Model Results
 
-| Rank | Model | OOF Brier (raw) | OOF Brier (calibrated) | Stage 1 Brier | CV Mean +/- Std |
+| Rank | Model | OOF Brier (raw) | OOF Brier (calibrated) | Stage 1 Brier | CV Weighted Mean |
 |------|-------|-----------------|----------------------|---------------|-----------------|
-| 1 | PyTorch BrierNet | 0.1779 | **0.1746** | 0.1869 | 0.1778 +/- 0.0187 |
-| 2 | XGBoost | 0.1826 | 0.1792 | 0.1801 | 0.1825 +/- 0.0195 |
-| 3 | Logistic Regression | 0.1845 | 0.1817 | 0.1919 | 0.1844 +/- 0.0176 |
+| 1 | PyTorch BrierNet | 0.1794 | **0.1760** | 0.1833 | 0.1802 |
+| 2 | XGBoost | 0.1812 | 0.1777 | 0.1813 | 0.1819 |
+| 3 | Logistic Regression | 0.1846 | 0.1817 | 0.1900 | 0.1865 |
 
 *Table 7: Men's model comparison, sorted by calibrated OOF Brier score (lower is better).*
 
@@ -362,14 +362,14 @@ We use **Leave-One-Season-Out (LOGO)** cross-validation — the standard approac
 
 | Feature | Gain |
 |---------|------|
-| SeedDiff | 134.42 |
-| EloDiff | 21.18 |
-| SeedA | 20.72 |
-| IsPowerConfDiff | 9.84 |
-| FGPctDiff | 6.23 |
-| TopSystemsAvgRankDiff | 4.43 |
+| SeedDiff | 67.94 |
+| TopSystemsAvgRankDiff | 39.16 |
+| EloDiff | 23.80 |
+| Seed_x_Rank | 16.06 |
+| FGM_MarginDiff | 9.12 |
+| IsPowerConfDiff | 8.25 |
 
-*Table 8: Top XGBoost features by gain (Men's). SeedDiff dominates.*
+*Table 8: Top XGBoost features by gain (Men's). SeedDiff dominates, followed by Massey rankings and Elo.*
 
 ### Ensemble Construction
 
@@ -377,21 +377,21 @@ Ensemble weights were optimized by minimizing Brier score on OOF predictions usi
 
 | Model | Optimized Weight |
 |-------|-----------------|
-| PyTorch | **0.6940** |
-| XGBoost | 0.3060 |
+| PyTorch | **0.5748** |
+| XGBoost | 0.4252 |
 | Logistic Regression | 0.0000 |
 
 | Evaluation | Brier Score |
 |-----------|-------------|
-| Best single model (PyTorch) | 0.1746 |
-| Equal-weight ensemble | 0.1752 |
-| **Optimized ensemble** | **0.1733** |
+| Best single model (PyTorch) | 0.1760 |
+| Equal-weight ensemble | 0.1762 |
+| **Optimized ensemble** | **0.1747** |
 | Improvement over best single | **-0.0013** |
-| **Stage 1 ensemble (2022-2025)** | **0.1772** |
+| **Stage 1 ensemble (2022-2025)** | **0.1801** |
 
 *Table 9: Men's ensemble weights and final Brier scores.*
 
-The ensemble heavily favors PyTorch (69%) with XGBoost (31%). Logistic regression receives 0% weight — its predictions are too correlated with the other models to provide ensemble diversity.
+The ensemble splits weight between PyTorch (57.5%) and XGBoost (42.5%). Logistic regression receives 0% weight — its predictions are too correlated with the other models to provide ensemble diversity.
 
 ---
 
@@ -403,11 +403,11 @@ The women's dataset spans 28 seasons (1998-2026) with 1,717 tournament games. Th
 
 | Dataset | Rows | Seasons | Description |
 |---------|------|---------|-------------|
-| Regular season (compact) | 142,093 | 1998-2026 | Game scores and locations |
-| Regular season (detailed) | 86,773 | 2010-2026 | Full box score statistics |
+| Regular season (compact) | 142,507 | 1998-2026 | Game scores and locations |
+| Regular season (detailed) | 87,187 | 2010-2026 | Full box score statistics |
 | Tournament (compact) | 1,717 | 1998-2025 | Tournament game scores |
 | Tournament (detailed) | 961 | 2010-2025 | Tournament box scores |
-| Tournament seeds | 1,744 | 1998-2025 | Seed assignments per team |
+| Tournament seeds | 1,812 | 1998-2026 | Seed assignments per team |
 
 *Table 10: Women's data sources and their coverage.*
 
@@ -415,8 +415,8 @@ The women's dataset spans 28 seasons (1998-2026) with 1,717 tournament games. Th
 |--------|-------|---------|
 | Compact results start | 1985 | 1998 |
 | Detailed box scores start | 2003 | 2010 |
-| Massey Ordinals | 191 systems available | Not available (synthetic rankings via Ridge regression, R²=0.416) |
-| Number of features | 74 | 58 |
+| Massey Ordinals | 192 systems available | Not available (synthetic rankings via Ridge regression, R²=0.423) |
+| Number of features | 74 | 63 |
 | Ensemble models | XGBoost + PyTorch + LogReg | CatBoost + PyTorch + LogReg |
 | LOGO-CV folds | 40 | 27 |
 
@@ -452,7 +452,7 @@ The women's tournament is significantly more predictable than the men's. Top see
 
 ## Feature Engineering
 
-The women's feature set replaces the 6 Massey-related features with a single synthetic ranking feature (built via Ridge regression on team stats, R²=0.416), and shares all other feature engineering with the men's pipeline. The Seed_x_Rank interaction uses SyntheticRankDiff instead of TopSystemsAvgRankDiff. Top-N opponent features use SyntheticRank thresholds. No Home/Road split features are computed for women's.
+The women's feature set uses 63 features. It replaces the 6 Massey-related features with a single synthetic ranking feature (built via Ridge regression on team stats, R²=0.423), and shares all other feature engineering with the men's pipeline. The Seed_x_Rank interaction uses SyntheticRankDiff instead of TopSystemsAvgRankDiff. Top-N opponent features use SyntheticRank thresholds. The women's pipeline does not include the men's Home/Road Top-N split features, but does include HomeWinPct and RoadWinPct.
 
 | Category | Features | Count |
 |----------|----------|-------|
@@ -466,11 +466,12 @@ The women's feature set replaces the 6 Massey-related features with a single syn
 | Pace | AvgPossDiff | 1 |
 | Conference & Elo | IsPowerConfDiff, ConfTourneyChampDiff, ConfRegSeasonChampDiff, EloDiff | 4 |
 | Schedule Strength | SOSDiff, PowerConfWinPctDiff, QualityWinPctDiff, ScoreStdDiff, Top25/10/5WinPctDiff | 7 |
+| Home/Road Splits | HomeWinPctDiff, RoadWinPctDiff | 2 |
 | Recent Form | RecentWinPctDiff, RecentAvgPointDiffDiff, RecentOff/Def/NetEffDiff, RecentFGPctDiff | 6 |
 | Box Score Stats | AvgTO/Stl/Blk/OR/DR/Ast Diff, DRB_PctDiff | 7 |
 | Interaction | Seed_x_Rank (SeedDiff x SyntheticRankDiff) | 1 |
 
-*Table 12: Women's feature set (58 features).*
+*Table 12: Women's feature set (63 features).*
 
 ## Model Training & Results
 
@@ -480,43 +481,43 @@ The women's ensemble uses CatBoost, PyTorch, and Logistic Regression. CatBoost w
 
 | Parameter | CatBoost | PyTorch | Logistic Regression |
 |-----------|----------|---------|---------------------|
-| Architecture | depth=7 | BrierNet(32 -> 32 -> 1) | Linear |
-| Learning rate | 0.172 | 0.00163 (Adam) | - |
-| Regularization | l2_leaf_reg=0.351, random_strength=7.983 | dropout=0.164, weight_decay=3.71e-6 | C=0.0240 (L1) |
-| Subsample | 0.545 (Bernoulli) | - | - |
-| Other | iterations=500 | batch_size=256 | solver=saga |
+| Architecture | depth=7 | BrierNet(256 -> 128 -> 1) | Linear |
+| Learning rate | 0.291 | 0.00639 (Adam) | - |
+| Regularization | l2_leaf_reg=0.366, random_strength=9.390 | dropout=0.358, weight_decay=2.97e-6 | C=0.01491 (elasticnet, l1_ratio=0.624) |
+| Subsample | 0.706 (Bernoulli) | - | - |
+| Other | iterations=500 | batch_size=128 | solver=saga |
 | Loss function | RMSE | Brier (MSE) | Log loss |
-| Final rounds/epochs | 47 | 14 | - |
+| Final rounds/epochs | 30 | early stopping | - |
 
 *Table 13: Tuned hyperparameters for women's models.*
 
 ### Individual Model Results
 
-| Rank | Model | OOF Brier (raw) | OOF Brier (calibrated) | Stage 1 Brier | CV Mean +/- Std |
+| Rank | Model | OOF Brier (raw) | OOF Brier (calibrated) | Stage 1 Brier | CV Weighted Mean |
 |------|-------|-----------------|----------------------|---------------|-----------------|
-| 1 | PyTorch BrierNet | 0.1373 | **0.1337** | 0.1222 | 0.1374 +/- 0.0233 |
-| 2 | CatBoost | 0.1403 | 0.1368 | 0.1294 | 0.1404 +/- 0.0202 |
-| 3 | Logistic Regression | 0.1417 | 0.1378 | 0.1343 | 0.1417 +/- 0.0195 |
+| 1 | PyTorch BrierNet | 0.1353 | **0.1313** | 0.1303 | 0.1332 |
+| 2 | CatBoost | 0.1421 | 0.1378 | 0.1287 | 0.1404 |
+| 3 | Logistic Regression | 0.1415 | 0.1379 | 0.1358 | 0.1399 |
 
 *Table 14: Women's model comparison, sorted by calibrated OOF Brier score.*
 
-Women's Brier scores are significantly lower than men's (~0.134 vs ~0.175), reflecting the more predictable nature of the women's tournament.
+Women's Brier scores are significantly lower than men's (~0.13 vs ~0.18), reflecting the more predictable nature of the women's tournament.
 
 ### Ensemble Construction
 
 | Model | Optimized Weight |
 |-------|-----------------|
-| PyTorch | **0.6766** |
-| CatBoost | 0.2957 |
-| Logistic Regression | 0.0277 |
+| PyTorch | **0.7029** |
+| CatBoost | 0.2971 |
+| Logistic Regression | 0.0000 |
 
 | Evaluation | Brier Score |
 |-----------|-------------|
-| Best single model (PyTorch) | 0.1337 |
-| Equal-weight ensemble | 0.1333 |
-| **Optimized ensemble** | **0.1325** |
-| Improvement over best single | **-0.0012** |
-| **Stage 1 ensemble (2022-2025)** | **0.1207** |
+| Best single model (PyTorch) | 0.1313 |
+| Equal-weight ensemble | 0.1315 |
+| **Optimized ensemble** | **0.1299** |
+| Improvement over best single | **-0.0014** |
+| **Stage 1 ensemble (2022-2025)** | **0.1248** |
 
 *Table 15: Women's ensemble weights and final Brier scores.*
 
@@ -528,8 +529,8 @@ Women's Brier scores are significantly lower than men's (~0.134 vs ~0.175), refl
 |-----------|-------------|-------------|------------|-----------|
 | Men's ensemble | 261,013 | 66,430 | [0.020, 0.980] | — |
 | Women's ensemble | 258,131 | 65,703 | [0.020, 0.980] | — |
-| **Combined Stage 1** | **519,144** | — | **[0.020, 0.980]** | **0.476** |
-| **Combined Stage 2** | — | **132,133** | **[0.020, 0.980]** | **0.470** |
+| **Combined Stage 1** | **519,144** | — | **[0.020, 0.980]** | **0.499** |
+| **Combined Stage 2** | — | **132,133** | **[0.020, 0.980]** | **0.498** |
 
 *Table 16: Final submission composition.*
 
@@ -543,9 +544,9 @@ All validations passed: correct row counts, correct columns (ID, Pred), no null 
 
 1. **Brier loss training**: The PyTorch model trained directly on Brier loss outperformed all gradient boosting models for both men's and women's. This was the single most impactful modeling decision.
 
-2. **Feature engineering expansion** (74 features for men's, 58 for women's): Margin features, advanced shooting metrics (eFG%, TS%), momentum features (WeightedWinPct, WinStreak, LossStreak), defensive rebound rate (DRB%), and strength-of-opponent features all contributed signal.
+2. **Feature engineering expansion** (74 features for men's, 63 for women's): Margin features, advanced shooting metrics (eFG%, TS%), momentum features (WeightedWinPct, WinStreak, LossStreak), defensive rebound rate (DRB%), and strength-of-opponent features all contributed signal.
 
-3. **Bayesian hyperparameter tuning**: Optuna tuning on Stage 1 validation folds improved every model. Key findings: XGBoost prefers depth=5 with moderate learning rate (0.20), PyTorch benefits from moderate weight decay, and elastic net with high L1 ratio works best for logistic regression.
+3. **Bayesian hyperparameter tuning**: Optuna tuning on Stage 1 validation folds improved every model. Key findings: XGBoost prefers shallow trees (depth=2) with moderate learning rate, PyTorch benefits from moderate weight decay, and elastic net with high L1 ratio works best for logistic regression.
 
 4. **Massey Ordinal rankings** (men's only): SeedDiff was the most important feature by far, but Massey rankings and Elo provided strong complementary signal. For women's, a synthetic ranking via Ridge regression partially compensated.
 
@@ -553,14 +554,14 @@ All validations passed: correct row counts, correct columns (ID, Pred), no null 
 
 6. **Flip-and-double augmentation**: Doubled the training data and eliminated ordering bias. Simple but essential — without it, the model could learn that the lower-ID team wins more often (an artifact of the ID assignment scheme).
 
-7. **Different ensembles for men's vs women's**: Men's uses XGBoost + PyTorch; women's uses CatBoost + PyTorch. CatBoost's native NaN handling benefits the women's data (more missing stats). Both ensembles give ~70% weight to PyTorch.
+7. **Different ensembles for men's vs women's**: Men's uses XGBoost + PyTorch; women's uses CatBoost + PyTorch. CatBoost's native NaN handling benefits the women's data (more missing stats). Both ensembles give majority weight to PyTorch.
 
 ## What's Different About Women's vs Men's
 
-- Women's tournament is ~24% more predictable (Brier 0.133 vs 0.173)
-- Both ensembles converge to ~70/30 splits favoring the neural net over the tree model
-- Without Massey Ordinals, the women's pipeline uses a synthetic ranking feature (Ridge regression, R²=0.416) — competitive but weaker than real Massey systems
-- Women's PyTorch prefers a smaller network (32->32) vs men's (64->32), reflecting simpler patterns
+- Women's tournament is ~26% more predictable (Brier 0.130 vs 0.175)
+- Both ensembles give PyTorch majority weight, but men's is a more balanced split (57.5/42.5) vs women's (70/30)
+- Without Massey Ordinals, the women's pipeline uses a synthetic ranking feature (Ridge regression, R²=0.423) — competitive but weaker than real Massey systems
+- Women's PyTorch prefers a larger network (256->128) vs men's (64->32), possibly compensating for the lack of Massey features by learning more complex interactions
 
 ## Research-Driven Decisions
 
@@ -586,10 +587,10 @@ Every major design decision was informed by investigating past winning solutions
 |-----------|--------------|
 | Naive (predict 0.5 for everything) | ~0.250 |
 | Seed-only model | ~0.210-0.230 |
-| **Our men's ensemble (all historical games)** | **0.1733** |
-| **Our men's ensemble (Stage 1 2022-2025)** | **0.1772** |
-| **Our women's ensemble (all historical games)** | **0.1325** |
-| **Our women's ensemble (Stage 1 2022-2025)** | **0.1207** |
+| **Our men's ensemble (all historical games)** | **0.1747** |
+| **Our men's ensemble (Stage 1 2022-2025)** | **0.1801** |
+| **Our women's ensemble (all historical games)** | **0.1299** |
+| **Our women's ensemble (Stage 1 2022-2025)** | **0.1248** |
 | Mid-tier Kaggle solution | ~0.126 |
 | Top 10% Kaggle solution | ~0.115-0.125 |
 
