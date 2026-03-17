@@ -288,6 +288,23 @@ The optimizer determined how much to trust each model, weighting recent seasons 
 
 *Table 9: Men's blend weights and final Brier scores. Weights were optimized with recency weighting — recent seasons count more.*
 
+### Model Evaluation (Men's)
+
+![Men's Model Brier Comparison](06_model_eval/output/mens_model_brier_comparison.png)
+*Side-by-side accuracy comparison across all men's models and blends. Lower bars = better predictions.*
+
+![Men's Per-Fold Brier Scores](06_model_eval/output/mens_per_fold_brier.png)
+*How each model performed on each individual season (Men's). Some seasons had more upsets and were harder for all models.*
+
+![Men's Prediction Distributions](06_model_eval/output/mens_prediction_distributions.png)
+*Distribution of predicted probabilities for each men's model. A good model should produce a wide range — not cluster everything near 50%.*
+
+![Men's Calibration Curves](06_model_eval/output/mens_calibration_curves.png)
+*Calibration curves (Men's). If a model says "70% chance," does that team actually win about 70% of the time? The closer to the diagonal, the better.*
+
+![Men's Model Correlation](06_model_eval/output/mens_model_correlation.png)
+*Prediction correlation between men's models. High similarity is why logistic regression got 0% weight — it wasn't adding a unique perspective.*
+
 ---
 
 # Part 2: Women's Tournament
@@ -407,22 +424,22 @@ The neural network dominates even more in the women's blend (67%) compared to me
 
 ---
 
-# Model Evaluation
+### Model Evaluation (Women's)
 
-![Model Brier Comparison](06_model_eval/output/model_brier_comparison.png)
-*Side-by-side accuracy comparison across all models and blends. Lower bars = better predictions.*
+![Women's Model Brier Comparison](06_model_eval/output/womens_model_brier_comparison.png)
+*Side-by-side accuracy comparison across all women's models and blends. Lower bars = better predictions.*
 
-![Per-Fold Brier Scores](06_model_eval/output/per_fold_brier.png)
-*How each model performed on each individual season. Some seasons (like 2011) had more upsets and were harder for all models.*
+![Women's Per-Fold Brier Scores](06_model_eval/output/womens_per_fold_brier.png)
+*How each model performed on each individual season (Women's). Some seasons had more upsets and were harder for all models.*
 
-![Prediction Distributions](06_model_eval/output/prediction_distributions.png)
-*What the models' predictions look like. A good model should produce a wide range of probabilities — not cluster everything near 50%.*
+![Women's Prediction Distributions](06_model_eval/output/womens_prediction_distributions.png)
+*Distribution of predicted probabilities for each women's model. A good model should produce a wide range — not cluster everything near 50%.*
 
-![Calibration Curves](06_model_eval/output/calibration_curves.png)
-*Are the probabilities trustworthy? If a model says "70% chance," does that team actually win about 70% of the time? The closer to the diagonal line, the better calibrated.*
+![Women's Calibration Curves](06_model_eval/output/womens_calibration_curves.png)
+*Calibration curves (Women's). If a model says "70% chance," does that team actually win about 70% of the time? The closer to the diagonal, the better.*
 
-![Model Correlation](06_model_eval/output/model_correlation.png)
-*How similar the models' predictions are to each other. High similarity between models is why logistic regression got 0% weight — it wasn't adding a unique perspective.*
+![Women's Model Correlation](06_model_eval/output/womens_model_correlation.png)
+*Prediction correlation between women's models. High similarity is why logistic regression got 0% weight — it wasn't adding a unique perspective.*
 
 ---
 
