@@ -288,7 +288,7 @@ The optimizer determined how much to trust each model, weighting recent seasons 
 
 *Table 9: Men's blend weights and final Brier scores. Weights were optimized with recency weighting — recent seasons count more.*
 
-### Model Evaluation (Men's)
+### Model Evaluation
 
 ![Men's Model Brier Comparison](06_model_eval/output/mens_model_brier_comparison.png)
 *Side-by-side accuracy comparison across all men's models and blends. Lower bars = better predictions.*
@@ -424,7 +424,7 @@ The neural network dominates even more in the women's blend (67%) compared to me
 
 ---
 
-### Model Evaluation (Women's)
+### Model Evaluation
 
 ![Women's Model Brier Comparison](06_model_eval/output/womens_model_brier_comparison.png)
 *Side-by-side accuracy comparison across all women's models and blends. Lower bars = better predictions.*
