@@ -527,4 +527,5 @@ march_machine_learning_mania_2026/
 │   ├── womens_notebook.ipynb
 │   └── output/                     Evaluation plots
 ├── 07_submission/                  Final CSV generation
+├── RESEARCH.md                     Past winning strategy analysis
 ```
