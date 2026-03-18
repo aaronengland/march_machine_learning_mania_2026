@@ -523,8 +523,9 @@ march_machine_learning_mania_2026/
 │   ├── pytorch/                    PyTorch BrierNet (both ensembles)
 │   └── logistic_regression/        Logistic Regression (both ensembles)
 ├── 06_model_eval/                  Model comparison + ensemble
+│   ├── mens_notebook.ipynb
+│   ├── womens_notebook.ipynb
 │   └── output/                     Evaluation plots
 ├── 07_submission/                  Final CSV generation
 ├── RESEARCH.md                     Past winning strategy analysis
-└── CLAUDE.md                       Project configuration
 ```
