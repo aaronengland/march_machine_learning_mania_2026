@@ -2,9 +2,9 @@
 
 **How these Predictions were Determined**
 
-For every possible matchup in the 2026 NCAA tournament — both men's and women's — I built machine learning models that predict the probability that one team beats another. For example, the model might say "Duke has a 74% chance of beating Oregon." The brackets on [aaron-england.com](https://aaron-england.com/march-madness) are the result of simulating the entire tournament using those predicted probabilities.
+For every possible matchup in the 2026 NCAA tournament - both men's and women's - I built machine learning models that predict the probability that one team beats another. For example, the model might say "Duke has a 74% chance of beating Oregon." The brackets on [aaron-england.com](https://aaron-england.com/march-madness) are the result of simulating the entire tournament using those predicted probabilities.
 
-These models were built for Kaggle's [March Machine Learning Mania 2026](https://www.kaggle.com/competitions/march-machine-learning-mania-2026/overview) competition, where predictions are scored using the **Brier score** — a measure of how close your predicted probabilities are to what actually happened. A perfect prediction scores 0; a coin flip scores 0.25. Lower is better.
+These models were built for Kaggle's [March Machine Learning Mania 2026](https://www.kaggle.com/competitions/march-machine-learning-mania-2026/overview) competition, where predictions are scored using the **Brier score** - a measure of how close your predicted probabilities are to what actually happened. A perfect prediction scores 0; a coin flip scores 0.25. Lower is better.
 
 ---
 
@@ -20,7 +20,7 @@ These models were built for Kaggle's [March Machine Learning Mania 2026](https:/
 | **Final ensemble** | **Brier: 0.1747** | **Brier: 0.1299** |
 | **Predictions generated** | 66,430 matchups | 65,703 matchups |
 
-**Understanding the scores:** All three score rows — "Best single model," "Final ensemble," and "Kaggle validation" — come from the same honest testing process (Phase 2 below). For each historical season, the model trained on every *other* season and predicted that one without ever seeing it. "Best single model" and "Final ensemble" are those predictions scored across *all* historical tournaments (1985-2025 for men's, 1998-2025 for women's). "Kaggle validation" is the same set of predictions, just filtered to the 2022-2025 tournaments — the subset Kaggle uses to rank competitors before the real 2026 games. It's slightly different because 4 seasons is a smaller, noisier sample than 40.
+**Understanding the scores:** All three score rows - "Best single model," "Final ensemble," and "Kaggle validation" - come from the same honest testing process (Phase 2 below). For each historical season, the model trained on every *other* season and predicted that one without ever seeing it. "Best single model" and "Final ensemble" are those predictions scored across *all* historical tournaments (1985-2025 for men's, 1998-2025 for women's). "Kaggle validation" is the same set of predictions, just filtered to the 2022-2025 tournaments - the subset Kaggle uses to rank competitors before the real 2026 games. It's slightly different because 4 seasons is a smaller, noisier sample than 40.
 
 ---
 
@@ -30,23 +30,23 @@ Every major design choice in this pipeline was informed by studying past winning
 
 | Decision | Why |
 |----------|-----|
-| Test on one season at a time | Standard approach in every top Kaggle solution — prevents "peeking" at future data |
-| Show each matchup from both sides | Recommended by 2023 gold medal winner — prevents ordering bias |
+| Test on one season at a time | Standard approach in every top Kaggle solution - prevents "peeking" at future data |
+| Show each matchup from both sides | Recommended by 2023 gold medal winner - prevents ordering bias |
 | Use specific expert ranking systems | 2023 gold medal winner identified POM, SAG, MOR, WLK as the most predictive |
 | Train neural net on Brier loss | Academic research showed this outperforms standard binary classification loss |
 | Calibrate probabilities after training | Top 2025 Kaggle solution confirmed this consistently improves scores |
-| Weight recent seasons more in blending | Modern basketball is most relevant to 2026 — a 2025 game counts 40x more than a 1985 game when finding blend weights |
-| Cap predictions at 2%-98% | Universal practice — being 100% confident and wrong is catastrophically penalized |
+| Weight recent seasons more in blending | Modern basketball is most relevant to 2026 - a 2025 game counts 40x more than a 1985 game when finding blend weights |
+| Cap predictions at 2%-98% | Universal practice - being 100% confident and wrong is catastrophically penalized |
 
 ---
 
 ## How the Models Were Built
 
-Three different types of models were trained for each gender, then blended together. Think of it like asking three different experts for their opinion, then combining their answers — giving more weight to the experts who have been right most often in the past. Each model was built in three phases:
+Three different types of models were trained for each gender, then blended together. Think of it like asking three different experts for their opinion, then combining their answers - giving more weight to the experts who have been right most often in the past. Each model was built in three phases:
 
 ### Phase 1: Find the Best Settings
 
-Every model has "knobs" you can turn — how fast it learns, how complex it can get, how aggressively it avoids memorizing noise, etc. To find the best combination of settings, an automated search (Optuna) tested 30-50 different configurations per model. For each configuration, it trained on 3 of the 4 most recent tournament seasons and predicted the 4th, rotating through all 4. The configuration that produced the best predictions was locked in for the next phases.
+Every model has "knobs" you can turn - how fast it learns, how complex it can get, how aggressively it avoids memorizing noise, etc. To find the best combination of settings, an automated search (Optuna) tested 30-50 different configurations per model. For each configuration, it trained on 3 of the 4 most recent tournament seasons and predicted the 4th, rotating through all 4. The configuration that produced the best predictions was locked in for the next phases.
 
 | Model | Trials | Tuning Folds | Best Trial Brier |
 |-------|--------|-------------|-----------------|
@@ -59,17 +59,17 @@ Every model has "knobs" you can turn — how fast it learns, how complex it can 
 
 ### Phase 2: Test on Every Historical Season
 
-With the settings locked in, each model was tested on **every historical tournament season one at a time**. For example, to see how well the model would have predicted the 2015 tournament, it trained on every other season (1985-2014, 2016-2025) and then predicted 2015 — never seeing 2015 data during training. This was repeated for all 40 men's seasons and 27 women's seasons, producing an honest prediction for every historical tournament game. These predictions were used to determine how much weight each model should get in the final blend.
+With the settings locked in, each model was tested on **every historical tournament season one at a time**. For example, to see how well the model would have predicted the 2015 tournament, it trained on every other season (1985-2014, 2016-2025) and then predicted 2015 - never seeing 2015 data during training. This was repeated for all 40 men's seasons and 27 women's seasons, producing an honest prediction for every historical tournament game. These predictions were used to determine how much weight each model should get in the final blend.
 
-After generating predictions, a calibration step was applied. If the model says "70% chance" but teams in that situation historically win 75% of the time, calibration corrects that drift — making the probabilities more accurate.
+After generating predictions, a calibration step was applied. If the model says "70% chance" but teams in that situation historically win 75% of the time, calibration corrects that drift - making the probabilities more accurate.
 
 ### Phase 3: Train the Final Model
 
-Finally, each model was retrained on **all available historical data** — every tournament game ever played — to make the actual 2026 predictions. The more data a model sees, the better it can learn patterns, so this final version is the strongest. Predictions are calibrated using the isotonic regression model from Phase 2, then clipped to [0.02, 0.98].
+Finally, each model was retrained on **all available historical data** - every tournament game ever played - to make the actual 2026 predictions. The more data a model sees, the better it can learn patterns, so this final version is the strongest. Predictions are calibrated using the isotonic regression model from Phase 2, then clipped to [0.02, 0.98].
 
 ### Blending the Models Together
 
-The last step is combining the three models into a single prediction. An optimizer found the best blend by finding the weights that would have produced the most accurate predictions across all historical tournaments — but with a twist: **recent seasons count more**. A game from 2025 is weighted 40x more than a game from 1985, because modern basketball is most relevant to predicting 2026. For men's, the final blend is roughly 55% neural network + 45% XGBoost. For women's, it's 67% neural network + 33% CatBoost. In both cases, logistic regression received 0% weight — its predictions were too similar to the other models to add anything new.
+The last step is combining the three models into a single prediction. An optimizer found the best blend by finding the weights that would have produced the most accurate predictions across all historical tournaments - but with a twist: **recent seasons count more**. A game from 2025 is weighted 40x more than a game from 1985, because modern basketball is most relevant to predicting 2026. For men's, the final blend is roughly 55% neural network + 45% XGBoost. For women's, it's 67% neural network + 33% CatBoost. In both cases, logistic regression received 0% weight - its predictions were too similar to the other models to add anything new.
 
 ```
 Phase 1: Find best settings       →  locked configuration per model
@@ -97,10 +97,10 @@ The pipeline runs in 8 stages, with separate men's and women's notebooks at each
 04_preprocessing/       Difference features + flip-and-double augmentation
         |
 05_models/              3 models x LOGO-CV + Optuna tuning + isotonic calibration
-   |  xgboost/            XGBoost (Optuna-tuned, custom Brier objective) — men's
-   |  catboost/           CatBoost (Optuna-tuned, RMSE loss) — women's
-   |  pytorch/            BrierNet (Optuna-tuned architecture, Brier loss) — both
-   |  logistic_regression/ LogisticRegression (Optuna-tuned C/penalty) — both
+   |  xgboost/            XGBoost (Optuna-tuned, custom Brier objective) - men's
+   |  catboost/           CatBoost (Optuna-tuned, RMSE loss) - women's
+   |  pytorch/            BrierNet (Optuna-tuned architecture, Brier loss) - both
+   |  logistic_regression/ LogisticRegression (Optuna-tuned C/penalty) - both
         |
 06_model_eval/          Compare models + optimize ensemble weights
         |
@@ -113,7 +113,7 @@ The pipeline runs in 8 stages, with separate men's and women's notebooks at each
 
 ## Data
 
-The men's dataset spans 41 seasons (1985-2026) with nearly 200,000 regular season games and 2,585 tournament games. A unique advantage for men's predictions: **Massey Ordinals** — pre-tournament rankings from ~192 different rating systems (KenPom, Sagarin, and many more) that provide expert opinions on team quality.
+The men's dataset spans 41 seasons (1985-2026) with nearly 200,000 regular season games and 2,585 tournament games. A unique advantage for men's predictions: **Massey Ordinals** - pre-tournament rankings from ~192 different rating systems (KenPom, Sagarin, and many more) that provide expert opinions on team quality.
 
 | Dataset | Rows | Seasons | Description |
 |---------|------|---------|-------------|
@@ -130,7 +130,7 @@ The men's dataset spans 41 seasons (1985-2026) with nearly 200,000 regular seaso
 
 ### How Predictive Are Seeds?
 
-A team's seed (their ranking in the bracket, 1 being the best) is by far the most useful piece of information for predicting tournament outcomes. 1-seeds win 79% of their tournament games, and 16-seeds have only beaten a 1-seed twice in men's history. But seeds alone aren't the whole story — that's where the other 73 features come in.
+A team's seed (their ranking in the bracket, 1 being the best) is by far the most useful piece of information for predicting tournament outcomes. 1-seeds win 79% of their tournament games, and 16-seeds have only beaten a 1-seed twice in men's history. But seeds alone aren't the whole story - that's where the other 73 features come in.
 
 ![Seed Win Rate](02_eda/output/seed_win_rate.png)
 *Figure 1: Tournament win rate by seed number (Men's, 1985-2025). Higher seeds win significantly more often, though 8 vs 9 matchups are essentially coin flips (48.1%).*
@@ -193,10 +193,10 @@ Among teams that make the tournament, which stats predict who goes furthest? See
 
 ### Do the Selection Committee's Seeds Match the Analytics?
 
-Seeds and analytical rankings generally agree, but there's meaningful disagreement — especially for seeds 5-12. When the committee and the analytics disagree, that's exactly where the models can find an edge.
+Seeds and analytical rankings generally agree, but there's meaningful disagreement - especially for seeds 5-12. When the committee and the analytics disagree, that's exactly where the models can find an edge.
 
 ![Seed vs Massey Rank](02_eda/output/seed_vs_massey_rank.png)
-*Figure 7: Tournament seed vs analytical ranking (Men's, 2003-2025). The wide spread within each seed — especially in the middle — means there's predictive signal beyond seed alone.*
+*Figure 7: Tournament seed vs analytical ranking (Men's, 2003-2025). The wide spread within each seed - especially in the middle - means there's predictive signal beyond seed alone.*
 
 ### Which Statistics Overlap?
 
@@ -207,7 +207,7 @@ Many basketball statistics measure similar things. Win percentage, point differe
 
 ## What the Models See
 
-For every potential matchup, the models don't see raw team stats — they see the **difference** between the two teams. For example, instead of "Duke shoots 48% and Oregon shoots 44%," the model sees "+4% shooting difference." This directly captures how two teams compare. The men's models use 74 of these difference features:
+For every potential matchup, the models don't see raw team stats - they see the **difference** between the two teams. For example, instead of "Duke shoots 48% and Oregon shoots 44%," the model sees "+4% shooting difference." This directly captures how two teams compare. The men's models use 74 of these difference features:
 
 | Category | Features | Count | Missing Rate |
 |----------|----------|-------|-------------|
@@ -245,7 +245,7 @@ Each model has different settings that control how it learns. These were automat
 
 ### How Each Model Performed
 
-The "All Historical" column shows accuracy across every past tournament (1985-2025). "Kaggle Validation" shows accuracy on just 2022-2025 — the 4 seasons Kaggle uses to rank competitors before the real 2026 tournament. Lower Brier score = better predictions.
+The "All Historical" column shows accuracy across every past tournament (1985-2025). "Kaggle Validation" shows accuracy on just 2022-2025 - the 4 seasons Kaggle uses to rank competitors before the real 2026 tournament. Lower Brier score = better predictions.
 
 | Rank | Model | All Historical (Brier) | After Calibration | Kaggle Validation (Brier) |
 |------|-------|----------------------|-------------------|--------------------------|
@@ -286,7 +286,7 @@ The optimizer determined how much to trust each model, weighting recent seasons 
 | Improvement over best single | **-0.0013** |
 | **Kaggle validation (2022-2025)** | **0.1800** |
 
-*Table 9: Men's blend weights and final Brier scores. Weights were optimized with recency weighting — recent seasons count more.*
+*Table 9: Men's blend weights and final Brier scores. Weights were optimized with recency weighting - recent seasons count more.*
 
 ### Model Evaluation
 
@@ -297,13 +297,13 @@ The optimizer determined how much to trust each model, weighting recent seasons 
 *How each model performed on each individual season (Men's). Some seasons had more upsets and were harder for all models.*
 
 ![Men's Prediction Distributions](06_model_eval/output/mens_prediction_distributions.png)
-*Distribution of predicted probabilities for each men's model. A good model should produce a wide range — not cluster everything near 50%.*
+*Distribution of predicted probabilities for each men's model. A good model should produce a wide range - not cluster everything near 50%.*
 
 ![Men's Calibration Curves](06_model_eval/output/mens_calibration_curves.png)
 *Calibration curves (Men's). If a model says "70% chance," does that team actually win about 70% of the time? The closer to the diagonal, the better.*
 
 ![Men's Model Correlation](06_model_eval/output/mens_model_correlation.png)
-*Prediction correlation between men's models. High similarity is why logistic regression got 0% weight — it wasn't adding a unique perspective.*
+*Prediction correlation between men's models. High similarity is why logistic regression got 0% weight - it wasn't adding a unique perspective.*
 
 ---
 
@@ -328,7 +328,7 @@ The women's dataset spans 28 seasons (1998-2026) with 1,717 tournament games. Th
 
 ### Seed Analysis
 
-The women's tournament is significantly more predictable than the men's — upsets happen only 21% of the time vs 27% in men's. Top seeds dominate more consistently, which means the models can be more confident in their predictions.
+The women's tournament is significantly more predictable than the men's - upsets happen only 21% of the time vs 27% in men's. Top seeds dominate more consistently, which means the models can be more confident in their predictions.
 
 ![Women's Seed Win Rate](02_eda/output/womens_seed_win_rate.png)
 *Figure 9: Tournament win rate by seed number (Women's, 1998-2025). 1-seeds and 2-seeds are even more dominant than in the men's tournament.*
@@ -354,7 +354,7 @@ The women's tournament is significantly more predictable than the men's — upse
 
 ## What the Models See
 
-The women's models use 63 difference features — fewer than men's because the 6 expert ranking features are replaced by a single synthetic ranking (since no expert ranking systems exist for women's basketball):
+The women's models use 63 difference features - fewer than men's because the 6 expert ranking features are replaced by a single synthetic ranking (since no expert ranking systems exist for women's basketball):
 
 | Category | Features | Count |
 |----------|----------|-------|
@@ -433,13 +433,13 @@ The neural network dominates even more in the women's blend (67%) compared to me
 *How each model performed on each individual season (Women's). Some seasons had more upsets and were harder for all models.*
 
 ![Women's Prediction Distributions](06_model_eval/output/womens_prediction_distributions.png)
-*Distribution of predicted probabilities for each women's model. A good model should produce a wide range — not cluster everything near 50%.*
+*Distribution of predicted probabilities for each women's model. A good model should produce a wide range - not cluster everything near 50%.*
 
 ![Women's Calibration Curves](06_model_eval/output/womens_calibration_curves.png)
 *Calibration curves (Women's). If a model says "70% chance," does that team actually win about 70% of the time? The closer to the diagonal, the better.*
 
 ![Women's Model Correlation](06_model_eval/output/womens_model_correlation.png)
-*Prediction correlation between women's models. High similarity is why logistic regression got 0% weight — it wasn't adding a unique perspective.*
+*Prediction correlation between women's models. High similarity is why logistic regression got 0% weight - it wasn't adding a unique perspective.*
 
 ---
 
@@ -464,7 +464,7 @@ Lower is better. My models are substantially more accurate than simple seed-base
 
 ## What Worked Best
 
-1. **Training the neural network to directly optimize the scoring metric** was the single most impactful decision. Instead of using a generic loss function, the PyTorch model learned to minimize the exact Brier score it would be graded on — and it outperformed every other model.
+1. **Training the neural network to directly optimize the scoring metric** was the single most impactful decision. Instead of using a generic loss function, the PyTorch model learned to minimize the exact Brier score it would be graded on - and it outperformed every other model.
 
 2. **Using 74 features instead of just seeds** added real value. Shooting efficiency, momentum, strength of schedule, and expert rankings all contributed beyond what seed alone could capture.
 
@@ -472,18 +472,18 @@ Lower is better. My models are substantially more accurate than simple seed-base
 
 4. **Expert rankings** (men's only) were the second most important input after seed, providing a strong analytical complement to the committee's seedings.
 
-5. **Probability calibration** — a simple post-processing step that corrects systematic biases in the predicted probabilities — improved every model.
+5. **Probability calibration** - a simple post-processing step that corrects systematic biases in the predicted probabilities - improved every model.
 
-6. **Data augmentation** — showing the model each matchup from both sides (Duke vs Oregon and Oregon vs Duke) — doubled the training data and prevented the model from learning spurious patterns based on team ordering.
+6. **Data augmentation** - showing the model each matchup from both sides (Duke vs Oregon and Oregon vs Duke) - doubled the training data and prevented the model from learning spurious patterns based on team ordering.
 
-7. **Tailoring the approach per gender** — using CatBoost (which handles missing data natively) for women's instead of XGBoost made a meaningful difference given the sparser historical data.
+7. **Tailoring the approach per gender** - using CatBoost (which handles missing data natively) for women's instead of XGBoost made a meaningful difference given the sparser historical data.
 
 ## Women's vs Men's: Key Differences
 
-- The women's tournament is ~26% more predictable (Brier 0.130 vs 0.175) — top seeds dominate more consistently
+- The women's tournament is ~26% more predictable (Brier 0.130 vs 0.175) - top seeds dominate more consistently
 - The neural network is even more dominant in the women's blend (67% vs 55%) because fewer expert inputs are available
-- Without expert ranking systems, the women's pipeline relies on a synthetic ranking built from game statistics — useful but weaker than the 192 real ranking systems available for men's
-- The women's neural network uses a larger architecture (256→128 neurons vs 64→32) — likely compensating for the missing ranking data by learning more complex patterns
+- Without expert ranking systems, the women's pipeline relies on a synthetic ranking built from game statistics - useful but weaker than the 192 real ranking systems available for men's
+- The women's neural network uses a larger architecture (256→128 neurons vs 64→32) - likely compensating for the missing ranking data by learning more complex patterns
 
 ---
 

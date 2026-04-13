@@ -1,4 +1,4 @@
-# March Machine Learning Mania — Research Findings
+# March Machine Learning Mania - Research Findings
 
 Research compiled March 2026, focusing on past Kaggle competition years 2021–2025.
 
@@ -17,14 +17,14 @@ The competition has evolved significantly over the years:
 
 ## 2. Past Winning Solutions
 
-### 2025 — 1st Place: Mohammad Odeh
+### 2025 - 1st Place: Mohammad Odeh
 
 - **Winner**: Mohammad Odeh (Kaggle handle: modeh7)
 - Writeup and notebook available at: https://www.kaggle.com/competitions/march-machine-learning-mania-2025/writeups/mohammad-odeh-first-place-solution
 - Final solution notebook: https://www.kaggle.com/code/modeh7/final-solution-ncaa-2025
 - Specific details of features and model are not publicly summarized in any blog post yet, but **XGBoost was reported to outperform CatBoost and LightGBM** for this competition winner.
 
-### 2025 — Rank ~107 (LinkedIn writeup, A. G.):
+### 2025 - Rank ~107 (LinkedIn writeup, A. G.):
 
 - Used a **single XGBoost model** with 23 features selected after permutation importance filtering.
 - Features: attacking/defensive metrics, seed differences, GLM-derived team quality metrics, historical point-difference statistics.
@@ -32,13 +32,13 @@ The competition has evolved significantly over the years:
 - **Calibration**: Cubic-spline calibration applied in-fold (not post-hoc), which improved CV score slightly.
 - CV Score: 9.258 (MAE). Lesson: "Simple single models like XGBoost are sufficient."
 
-### 2024 — 1st Place
+### 2024 - 1st Place
 
 - Winner was a high school science and stats teacher using **R to implement a Monte Carlo simulation** based on a combination of third-party team ratings and personal intuition.
 - Second place also used R.
 - This year's winner essentially did **team rating simulation** rather than pure ML, illustrating that well-calibrated domain knowledge can beat complex ensembles.
 
-### 2023 — Top 1% Gold (maze508, Medium writeup)
+### 2023 - Top 1% Gold (maze508, Medium writeup)
 
 This is the most detailed publicly available solution writeup for the modern competition format.
 
@@ -59,7 +59,7 @@ This is the most detailed publicly available solution writeup for the modern com
 **Calibration / Post-processing:**
 - Acknowledged that XGB predictions initially clustered around 0.5.
 - Explored scaling predictions during post-processing.
-- For the women's bracket: aggressive overrides — set Seeds 1, 2, 3 to beat Seeds 14, 15, 16 with very high probability (women's tournament has fewer upsets historically).
+- For the women's bracket: aggressive overrides - set Seeds 1, 2, 3 to beat Seeds 14, 15, 16 with very high probability (women's tournament has fewer upsets historically).
 - For the men's bracket: typically set Seed 1 to beat Seed 16 with high confidence, but more conservative elsewhere.
 
 **Key insight on Brier vs. Log Loss:** The switch to Brier score encourages slightly more "gambling" (extreme overrides) since Brier penalizes extreme wrong predictions less severely than log loss. However, large overrides on moderate-confidence games still hurt.
@@ -70,17 +70,17 @@ This is the most detailed publicly available solution writeup for the modern com
 - Per-possession box-score adjusted features added for 2002+ data.
 - **Feature selection:** Boruta algorithm identified 42 confirmed predictive features from ~500 candidates.
 - **Model:** XGBoost (tree depth=2, learning rate=0.012, subsample=44.3%), tuned with Bayesian optimization over 1000 iterations.
-- **Result:** Log loss ~0.501 on 2019 validation — about middle of the pack.
+- **Result:** Log loss ~0.501 on 2019 validation - about middle of the pack.
 - **Calibration tricks:**
   - Probability capping at 0.95/0.05 to limit penalty exposure from overconfident wrong picks.
   - Dual submissions: coinflip games (45–55% win probability) assigned artificially high confidence in one submission.
   - Injury adjustment using Vegas spreads.
 
-### Andrew Landgraf — Earlier 1st Place (pre-2023 era)
+### Andrew Landgraf - Earlier 1st Place (pre-2023 era)
 
 - Used simple combination of rating systems (Sagarin, Pomeroy, Moore, Whitlock) averaged together.
 - Fitted logistic regression on the composite score.
-- **Log loss on combined ratings: ~0.543** — competitive with more complex approaches at the time.
+- **Log loss on combined ratings: ~0.543** - competitive with more complex approaches at the time.
 - Key insight: thoughtfully combining a few proven ratings systems is extremely competitive.
 
 ---
@@ -89,7 +89,7 @@ This is the most detailed publicly available solution writeup for the modern com
 
 These are the features that consistently appear in top solutions:
 
-### Tier 1 — Highest Predictive Value
+### Tier 1 - Highest Predictive Value
 
 1. **Massey Ordinal rankings** (men's only): Pre-tournament ratings from systems like Pomeroy (POM), Sagarin (SAG), Moore (MOR), Whitlock (WLK). Top solutions select the 5–10 historically best systems and average or stack them. Use the **latest Massey ranking before the tournament** (DayNum < 132).
 
@@ -99,7 +99,7 @@ These are the features that consistently appear in top solutions:
 
 4. **Adjusted Offensive and Defensive Efficiency** (AdjOE, AdjDE): KenPom-style tempo-free stats. AdjEM (efficiency margin = AdjOE - AdjDE) is one of the best single predictors of tournament success. Feature is computed as the **difference** between the two teams' values.
 
-### Tier 2 — Strong Secondary Features
+### Tier 2 - Strong Secondary Features
 
 5. **Win percentage** (regular season): Simple but useful.
 6. **Point differential / Margin of victory**: Raw or adjusted for pace.
@@ -111,7 +111,7 @@ These are the features that consistently appear in top solutions:
 12. **Turnovers and free throws**: Turnover margin and FTA rate are predictive.
 13. **Home/away splits**: Some models use separate statistics for neutral-site performance.
 
-### Tier 3 — Supplementary
+### Tier 3 - Supplementary
 
 14. **Conference indicators / Power conference membership**: Power 6 conferences correlate with tournament depth.
 15. **Coach/program prestige metrics**: History of tournament appearances.
@@ -121,7 +121,7 @@ These are the features that consistently appear in top solutions:
 
 The dominant pattern is to compute **per-team season averages**, then create **difference features** for each matchup: `feature_diff = team_A_stat - team_B_stat`. This reduces dimensionality and captures relative strength, which is what actually drives outcomes.
 
-**Data augmentation:** "Flip and double" each game — add the mirror record with features negated and label flipped. This prevents the model from learning artifacts based on which team is listed first and doubles training data.
+**Data augmentation:** "Flip and double" each game - add the mirror record with features negated and label flipped. This prevents the model from learning artifacts based on which team is listed first and doubles training data.
 
 ---
 
@@ -159,10 +159,10 @@ Academic research (arXiv:2508.02725) comparing LSTM and Transformers on NCAA pre
 
 ### Model Recommendation Priority
 
-1. XGBoost (primary) — well-tested, strong performance, feature importance available
-2. LightGBM — fast alternative, competitive
-3. Bradley-Terry / Logistic Regression — excellent calibration baselines
-4. PyTorch / TensorFlow — use Brier loss directly; require careful regularization
+1. XGBoost (primary) - well-tested, strong performance, feature importance available
+2. LightGBM - fast alternative, competitive
+3. Bradley-Terry / Logistic Regression - excellent calibration baselines
+4. PyTorch / TensorFlow - use Brier loss directly; require careful regularization
 
 ---
 
@@ -226,7 +226,7 @@ Given the 5 models (XGBoost, LightGBM, CatBoost, PyTorch, TensorFlow):
 
 **Men's model:** Use Massey Ordinals as primary features. Average POM, SAG, MOR, WLK at minimum. Supplement with derived efficiency stats and Elo. Model upsets explicitly.
 
-**Women's model:** No Massey Ordinals — must derive quality estimates entirely from box score stats (AdjOE, AdjDE via rolling regression), game results, and seeds. Simpler models may generalize better due to less noise. Consider using a simpler LR or Bradley-Terry baseline alongside gradient boosting. Apply aggressive seed-based overrides in low-seed vs. high-seed matchups.
+**Women's model:** No Massey Ordinals - must derive quality estimates entirely from box score stats (AdjOE, AdjDE via rolling regression), game results, and seeds. Simpler models may generalize better due to less noise. Consider using a simpler LR or Bradley-Terry baseline alongside gradient boosting. Apply aggressive seed-based overrides in low-seed vs. high-seed matchups.
 
 **Women's external data opportunity:** The competition does not prohibit external data. BartTorvik.com and HerHoopStats provide KenPom-style women's analytics. Incorporating these could significantly improve women's model quality.
 
@@ -365,17 +365,17 @@ The competition scoring (since 2024) averages over 6 rounds rather than all game
 
 ## Sources
 
-- [First Place Solution 2025 — Mohammad Odeh | Kaggle](https://www.kaggle.com/competitions/march-machine-learning-mania-2025/writeups/mohammad-odeh-first-place-solution)
-- [Final Solution Notebook 2025 — modeh7 | Kaggle](https://www.kaggle.com/code/modeh7/final-solution-ncaa-2025)
-- [Top 1% Gold — March Machine Learning Mania 2023 Solution Writeup | maze508 | Medium](https://medium.com/@maze508/top-1-gold-kaggle-march-machine-learning-mania-2023-solution-writeup-2c0273a62a78)
-- [March Machine Learning Mania 2025 — Rank 107 Approach | LinkedIn](https://www.linkedin.com/pulse/march-machine-learning-mania-2025-rank-107-approach-g13jf)
+- [First Place Solution 2025 - Mohammad Odeh | Kaggle](https://www.kaggle.com/competitions/march-machine-learning-mania-2025/writeups/mohammad-odeh-first-place-solution)
+- [Final Solution Notebook 2025 - modeh7 | Kaggle](https://www.kaggle.com/code/modeh7/final-solution-ncaa-2025)
+- [Top 1% Gold - March Machine Learning Mania 2023 Solution Writeup | maze508 | Medium](https://medium.com/@maze508/top-1-gold-kaggle-march-machine-learning-mania-2023-solution-writeup-2c0273a62a78)
+- [March Machine Learning Mania 2025 - Rank 107 Approach | LinkedIn](https://www.linkedin.com/pulse/march-machine-learning-mania-2025-rank-107-approach-g13jf)
 - [March Machine Learning Mania 2024 | Kaggle](https://www.kaggle.com/competitions/march-machine-learning-mania-2024)
 - [March Machine Learning Mania, 1st Place Winner's Interview: Andrew Landgraf | Kaggle Blog | Medium](https://medium.com/kaggle-blog/march-machine-learning-mania-1st-place-winners-interview-andrew-landgraf-f18214efc659)
 - [2021 March Madness Kaggle Solution | John Edwards](https://johnbedwards.io/blog/march_madness_2021/)
 - [Forecasting NCAA Basketball Outcomes with Deep Learning: LSTM and Transformer | arXiv:2508.02725](https://arxiv.org/html/2508.02725v1)
 - [NCAA Bracket Prediction Using Machine Learning and Combinatorial Fusion Analysis | arXiv:2603.10916](https://arxiv.org/html/2603.10916v1)
 - [March Madness Tournament Predictions Model: A Mathematical Modeling Approach | arXiv:2503.21790](https://arxiv.org/html/2503.21790v1)
-- [My completely uninformed guide to March Madness — Stats in the Wild (Bradley-Terry, 2024)](https://statsinthewild.com/2024/03/21/my-completely-uninformed-guide-to-march-madness-and-some-thoughts-on-my-kaggle-entry/)
+- [My completely uninformed guide to March Madness - Stats in the Wild (Bradley-Terry, 2024)](https://statsinthewild.com/2024/03/21/my-completely-uninformed-guide-to-march-madness-and-some-thoughts-on-my-kaggle-entry/)
 - [Machine Learning Madness: Predicting Every Tournament Matchup | Conor Dewey](https://www.conordewey.com/blog/machine-learning-madness-predicting-every-ncaa-tournament-matchup)
 - [March ML Mania 2026 GitHub Baseline | ngusadeep](https://github.com/ngusadeep/March-ML-Mania)
 - [2025 March Machine Learning Mania Leaderboard | Kaggle Dataset](https://www.kaggle.com/datasets/brisamarina/2025-march-machine-learning-mania-leaderboard)

@@ -31,11 +31,11 @@ def add_bullet(text):
 add_heading('March Machine Learning Mania 2026: Building an NCAA Tournament Prediction Pipeline', level=1)
 
 add_body(
-    "March Madness is one of the most exciting — and unpredictable — events in sports. "
+    "March Madness is one of the most exciting - and unpredictable - events in sports. "
     "This year I competed in Kaggle's March Machine Learning Mania 2026 competition, "
     "where the goal is to predict the probability of every possible team matchup in both "
     "the Men's and Women's NCAA basketball tournaments. Your submission is scored by "
-    "Brier score — the mean squared error between your predicted probabilities and the "
+    "Brier score - the mean squared error between your predicted probabilities and the "
     "actual binary outcomes. Lower is better, and overconfident wrong predictions are "
     "punished heavily."
 )
@@ -49,7 +49,7 @@ add_heading('Step 1: Data Collection & Joining', level=2)
 
 add_body(
     "The competition provides decades of NCAA basketball data: game scores, box scores, "
-    "tournament seeds, conference affiliations, coaching records, and — for men's only — "
+    "tournament seeds, conference affiliations, coaching records, and - for men's only - "
     "weekly rankings from ~192 rating systems (Massey Ordinals). "
     "The men's data spans 41 seasons (1985–2026) with ~199K regular season games and 2,585 "
     "tournament games. The women's data spans 28 seasons (1998–2026) with ~143K regular season "
@@ -57,7 +57,7 @@ add_body(
 )
 
 add_body(
-    "I merged and aggregated all of these sources into clean per-team, per-season datasets — "
+    "I merged and aggregated all of these sources into clean per-team, per-season datasets - "
     "computing season averages, shooting percentages, efficiency ratings, Elo ratings, "
     "momentum features (weighted win percentage, win/loss streaks), and strength of schedule. "
     "For men's, I also processed the Massey Ordinals, filtering to pre-tournament rankings "
@@ -66,7 +66,7 @@ add_body(
 
 add_body(
     "Since women's basketball has no Massey Ordinals, I built a synthetic quality ranking "
-    "using Ridge regression trained on tournament seeds as a proxy target — essentially "
+    "using Ridge regression trained on tournament seeds as a proxy target - essentially "
     "predicting \"how good is this team\" from their season stats."
 )
 
@@ -82,7 +82,7 @@ add_bullet(
     "against 16-seeds, while 8-vs-9 matchups are essentially coin flips (48.1%)."
 )
 add_bullet(
-    "The women's tournament is significantly more predictable than the men's — "
+    "The women's tournament is significantly more predictable than the men's - "
     "the overall upset rate is 21.1% vs 27.3% for men's."
 )
 add_bullet(
@@ -120,7 +120,7 @@ add_bullet("Home/road win percentages")
 add_bullet("Recent form (last 14 games before tournament)")
 
 add_body(
-    "A critical augmentation step was \"flip and double\" — each training matchup appears "
+    "A critical augmentation step was \"flip and double\" - each training matchup appears "
     "twice (original and mirror with negated features and flipped label). This prevents "
     "the model from learning artifacts based on team ID ordering and produces perfectly "
     "balanced 50/50 labels."
@@ -130,7 +130,7 @@ add_body(
 add_heading('Step 4: Cross-Validation Strategy', level=2)
 
 add_body(
-    "I used Leave-One-Season-Out (LOGO) cross-validation — the standard approach validated "
+    "I used Leave-One-Season-Out (LOGO) cross-validation - the standard approach validated "
     "by past winning solutions. Each season serves as one fold: train on all other seasons' "
     "tournament games, predict the held-out season. This gave 40 folds for men's (1985–2025, "
     "excluding the canceled 2020 tournament) and 27 folds for women's (1998–2025)."
@@ -160,21 +160,21 @@ p.add_run("CatBoost + PyTorch neural network + Logistic Regression")
 
 add_body(
     "CatBoost was used for women's instead of XGBoost because it handles missing values "
-    "natively — important since ~44% of women's training data lacks detailed box scores (pre-2010)."
+    "natively - important since ~44% of women's training data lacks detailed box scores (pre-2010)."
 )
 
 add_body("Each model went through three phases:")
 
 add_bullet(
-    "Phase 1 — Hyperparameter tuning: Optuna Bayesian optimization (30–50 trials) "
+    "Phase 1 - Hyperparameter tuning: Optuna Bayesian optimization (30–50 trials) "
     "on the 4 most recent seasons (2022–2025) to find the best configuration."
 )
 add_bullet(
-    "Phase 2 — Full LOGO cross-validation: Using the tuned hyperparameters, generate "
+    "Phase 2 - Full LOGO cross-validation: Using the tuned hyperparameters, generate "
     "out-of-fold predictions across all folds for ensemble weight optimization."
 )
 add_bullet(
-    "Phase 3 — Final model: Train on ALL historical data with the same hyperparameters, "
+    "Phase 3 - Final model: Train on ALL historical data with the same hyperparameters, "
     "then generate 2026 predictions."
 )
 
@@ -206,7 +206,7 @@ add_bullet("Men's: PyTorch 57.5% + XGBoost 42.5% + Logistic Regression 0%")
 add_bullet("Women's: PyTorch 70.3% + CatBoost 29.7% + Logistic Regression 0%")
 
 add_body(
-    "In both cases, logistic regression received zero weight — its predictions were "
+    "In both cases, logistic regression received zero weight - its predictions were "
     "too correlated with the other models to add ensemble diversity. The PyTorch model "
     "trained on Brier loss dominated both ensembles."
 )
@@ -236,7 +236,7 @@ add_body(
 add_heading('Key Takeaways', level=2)
 
 add_bullet(
-    "Training directly on Brier loss was the single most impactful decision — "
+    "Training directly on Brier loss was the single most impactful decision - "
     "the PyTorch model outperformed all gradient boosting models for both genders."
 )
 add_bullet(
@@ -269,7 +269,7 @@ add_bullet("Jupyter notebooks for the full pipeline")
 # -- Closing --
 add_body("")
 add_body(
-    "The full pipeline — from raw CSVs to 132,133 matchup predictions — runs end to end "
+    "The full pipeline - from raw CSVs to 132,133 matchup predictions - runs end to end "
     "in Jupyter notebooks on SageMaker. Every design decision was informed by researching "
     "past winning solutions, and the code is structured so the entire pipeline can be "
     "re-run when new season data becomes available."
